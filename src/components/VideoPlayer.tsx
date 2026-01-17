@@ -61,9 +61,9 @@ export function VideoPlayer({ manifest }: VideoPlayerProps) {
   }, []);
 
   const handleDownload = useCallback(() => {
-    // Show hint that export is coming soon
+    // Show hint - rendering requires Remotion CLI
     setShowDownloadHint(true);
-    setTimeout(() => setShowDownloadHint(false), 2000);
+    setTimeout(() => setShowDownloadHint(false), 3000);
   }, []);
 
   const progress = (currentFrame / manifest.durationInFrames) * 100;
@@ -121,9 +121,12 @@ export function VideoPlayer({ manifest }: VideoPlayerProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="absolute bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 bg-zinc-800 text-white text-sm rounded-lg shadow-lg"
+            className="absolute bottom-8 left-1/2 -translate-x-1/2 px-4 py-3 bg-zinc-800 text-white text-sm rounded-lg shadow-lg max-w-xs text-center"
           >
-            Export coming soon!
+            <p className="font-medium">Export via Remotion CLI</p>
+            <p className="text-xs text-zinc-400 mt-1">
+              Run: npx remotion render
+            </p>
           </motion.div>
         )}
       </div>
@@ -183,7 +186,7 @@ export function VideoPlayer({ manifest }: VideoPlayerProps) {
           <button
             onClick={handleDownload}
             className="p-2.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-zinc-400 hover:text-white"
-            title="Download video"
+            title="Export video"
           >
             <Download className="w-5 h-5" />
           </button>

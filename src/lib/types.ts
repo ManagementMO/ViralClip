@@ -13,12 +13,13 @@ export const CaptionSchema = z.object({
 });
 export type Caption = z.infer<typeof CaptionSchema>;
 
-// Video clip reference
+// Media clip reference (video or image)
 export const ClipSchema = z.object({
   startFrame: z.number(),
   duration: z.number(),
-  videoUrl: z.string().url(),
-  sourceStartTime: z.number().default(0),
+  type: z.enum(["video", "image"]).default("video"),
+  url: z.string().url(),
+  sourceStartTime: z.number().default(0), // Only for video clips
 });
 export type Clip = z.infer<typeof ClipSchema>;
 

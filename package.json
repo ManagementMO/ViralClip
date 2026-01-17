@@ -18,6 +18,7 @@
     "@remotion/zod-types": "4.0.406",
     "@tailwindcss/postcss": "^4.1.18",
     "ai": "^6.0.39",
+    "cheerio": "^1.1.2",
     "clsx": "^2.1.1",
     "lucide-react": "^0.562.0",
     "mongoose": "^9.1.4",
@@ -32,6 +33,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.0",
+    "@types/cheerio": "^0.22.35",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

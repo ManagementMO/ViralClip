@@ -7,8 +7,10 @@ import type {
   ScrapedProduct,
   Caption,
 } from "@/lib/types";
-import { MOCK_MANIFEST, MOCK_PRODUCT } from "@/lib/mock-data";
+import { MOCK_MANIFEST } from "@/lib/mock-data";
 import { generateId } from "@/lib/utils";
+import { scrapeProduct } from "@/lib/scraper";
+import { generateVideoVoiceover } from "@/lib/tts";
 
 // Initialize Google GenAI client
 const getGenAI = () => {
@@ -18,18 +20,6 @@ const getGenAI = () => {
   }
   return new GoogleGenAI({ apiKey });
 };
-
-// Mock product scraping (will be replaced with actual scraping)
-async function scrapeProduct(url: string): Promise<ScrapedProduct> {
-  // In production, this would use Puppeteer or a scraping API
-  // For now, return mock data with URL validation
-  void url; // Acknowledge parameter usage for future implementation
-
-  return {
-    ...MOCK_PRODUCT,
-    images: [MOCK_PRODUCT.image],
-  };
-}
 
 // Validate parsed captions from AI response
 function validateCaptions(captions: unknown): captions is Caption[] {
@@ -132,6 +122,28 @@ Return ONLY a JSON object in this exact format (no markdown, no code blocks):
   }
 }
 
+// Generate image clips from product images
+function generateClipsFromImages(
+  images: string[],
+  durationInFrames: number
+): VideoManifest["clips"] {
+  if (images.length === 0) {
+    return [];
+  }
+
+  // Distribute images across the video duration
+  const clipDuration = Math.floor(durationInFrames / Math.min(images.length, 5));
+  const clipsToUse = images.slice(0, 5); // Max 5 clips
+
+  return clipsToUse.map((url, index) => ({
+    startFrame: index * clipDuration,
+    duration: clipDuration,
+    type: "image" as const,
+    url,
+    sourceStartTime: 0,
+  }));
+}
+
 // Main video generation action
 export async function generateVideo(
   productUrl: string,
@@ -144,17 +156,33 @@ export async function generateVideo(
     // Step 2: Generate script and captions with Gemini
     const { script, captions } = await generateScriptWithGemini(product, style);
 
-    // Step 3: Build video manifest
+    // Step 3: Generate clips from product images
+    const durationInFrames = 300; // 10 seconds
+    const clips = generateClipsFromImages(product.images, durationInFrames);
+
+    // Step 4: Generate voiceover audio (optional - requires API key)
+    const ttsResult = await generateVideoVoiceover(script, style as "hype" | "minimal" | "luxury" | "playful");
+
+    // Step 5: Build video manifest
     const manifest: VideoManifest = {
       id: generateId(),
       script,
-      audioUrl: undefined,
+      audioUrl: ttsResult?.audioUrl,
       fps: 30,
-      durationInFrames: 300,
+      durationInFrames,
       width: 1080,
       height: 1920,
       captions,
-      clips: MOCK_MANIFEST.clips,
+      clips: clips.length > 0 ? clips : [
+        // Fallback to single product image if no images found
+        {
+          startFrame: 0,
+          duration: durationInFrames,
+          type: "image" as const,
+          url: product.image,
+          sourceStartTime: 0,
+        },
+      ],
       product: {
         title: product.title,
         price: product.price,
