@@ -6,12 +6,14 @@ import {
   interpolate,
   random,
 } from "remotion";
-import type { CaptionStyle } from "../../src/lib/types";
+import type { CaptionStyle, Theme } from "../../src/lib/types";
+import { THEME_PRESETS } from "../../src/lib/types";
 
 interface DynamicTextProps {
   text: string;
   style: CaptionStyle;
   durationInFrames: number;
+  theme?: Theme;
 }
 
 // Base CSS properties shared across styles
@@ -42,9 +44,13 @@ export const DynamicText: React.FC<DynamicTextProps> = ({
   text,
   style,
   durationInFrames,
+  theme = THEME_PRESETS.cyber,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+
+  // Get theme colors
+  const { primaryColor, secondaryColor, accentColor, fontFamily } = theme;
 
   // Entry animation
   const entryProgress = spring({
@@ -85,18 +91,22 @@ export const DynamicText: React.FC<DynamicTextProps> = ({
       Math.sin(frame * 0.5) *
       interpolate(frame, [0, 10], [5, 0], { extrapolateRight: "clamp" });
 
+    // Theme-specific glow color
+    const glowColor = primaryColor;
+    const glowRgb = hexToRgb(glowColor);
+
     return {
       transform: `scale(${scale}) translateX(${shakeX}px)`,
-      color: "#ccff00",
+      color: primaryColor,
       fontSize: "clamp(48px, 8vw, 72px)",
       fontWeight: 900,
-      fontFamily: "Oswald, sans-serif",
+      fontFamily: `${fontFamily}, sans-serif`,
       textTransform: "uppercase",
       letterSpacing: "0.05em",
       textShadow: `
-        0 0 20px rgba(204, 255, 0, 0.8),
-        0 0 40px rgba(204, 255, 0, 0.4),
-        0 0 60px rgba(204, 255, 0, 0.2),
+        0 0 20px rgba(${glowRgb}, 0.8),
+        0 0 40px rgba(${glowRgb}, 0.4),
+        0 0 60px rgba(${glowRgb}, 0.2),
         2px 2px 0 #000,
         -2px -2px 0 #000,
         2px -2px 0 #000,
@@ -115,16 +125,16 @@ export const DynamicText: React.FC<DynamicTextProps> = ({
 
     return {
       transform: `translateX(${glitchOffset}px)`,
-      color: "#fff",
+      color: accentColor,
       fontSize: "clamp(40px, 7vw, 64px)",
       fontWeight: 800,
-      fontFamily: "Oswald, sans-serif",
+      fontFamily: `${fontFamily}, sans-serif`,
       textTransform: "uppercase",
       letterSpacing: "0.02em",
       textShadow: `
-        ${rgbOffset}px 0 0 rgba(255, 0, 0, 0.7),
-        ${-rgbOffset}px 0 0 rgba(0, 255, 255, 0.7),
-        0 0 20px rgba(189, 0, 255, 0.5)
+        ${rgbOffset}px 0 0 ${secondaryColor}bb,
+        ${-rgbOffset}px 0 0 ${primaryColor}bb,
+        0 0 20px ${secondaryColor}88
       `,
     };
   }
@@ -133,15 +143,20 @@ export const DynamicText: React.FC<DynamicTextProps> = ({
   function getMinimalStyle(): BaseStyleProps {
     const slideUp = interpolate(entryProgress, [0, 1], [20, 0]);
 
+    // For minimal theme, use darker text on light backgrounds
+    const textColor = theme.id === "minimal" ? "#333333" : "#ffffff";
+
     return {
       transform: `translateY(${slideUp}px)`,
-      color: "#ffffff",
+      color: textColor,
       fontSize: "clamp(32px, 5vw, 48px)",
       fontWeight: 400,
-      fontFamily: "Inter, sans-serif",
+      fontFamily: `${fontFamily}, sans-serif`,
       textTransform: "uppercase",
       letterSpacing: "0.1em",
-      textShadow: "0 2px 20px rgba(0, 0, 0, 0.5)",
+      textShadow: theme.id === "minimal"
+        ? "0 2px 10px rgba(0, 0, 0, 0.1)"
+        : "0 2px 20px rgba(0, 0, 0, 0.5)",
     };
   }
 
@@ -155,15 +170,20 @@ export const DynamicText: React.FC<DynamicTextProps> = ({
     // Blink cursor at ~2Hz (human-readable rate)
     const cursorOpacity = Math.sin(frame * 0.2) > 0 ? 1 : 0;
 
+    const textColor = theme.id === "minimal" ? "#333333" : primaryColor;
+    const glowRgb = hexToRgb(primaryColor);
+
     return {
       transform: "none",
-      color: "#ccff00",
+      color: textColor,
       fontSize: "clamp(36px, 6vw, 56px)",
       fontWeight: 500,
-      fontFamily: "monospace",
+      fontFamily: `"SF Mono", "Fira Code", monospace`,
       textTransform: "none",
       letterSpacing: "0.05em",
-      textShadow: "0 0 10px rgba(204, 255, 0, 0.5)",
+      textShadow: theme.id === "minimal"
+        ? "none"
+        : `0 0 10px rgba(${glowRgb}, 0.5)`,
       charsToShow,
       cursorOpacity,
     };
@@ -202,7 +222,7 @@ export const DynamicText: React.FC<DynamicTextProps> = ({
     color,
     fontSize,
     fontWeight,
-    fontFamily,
+    fontFamily: styleFontFamily,
     textTransform,
     letterSpacing,
     textShadow,
@@ -213,7 +233,7 @@ export const DynamicText: React.FC<DynamicTextProps> = ({
     color,
     fontSize,
     fontWeight,
-    fontFamily,
+    fontFamily: styleFontFamily,
     textTransform,
     letterSpacing,
     textShadow,
@@ -252,3 +272,10 @@ export const DynamicText: React.FC<DynamicTextProps> = ({
     </AbsoluteFill>
   );
 };
+
+// Helper to convert hex color to RGB values
+function hexToRgb(hex: string): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return "255, 255, 255";
+  return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`;
+}

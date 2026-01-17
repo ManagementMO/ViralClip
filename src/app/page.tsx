@@ -43,6 +43,10 @@ export default function Home() {
     setError(null);
   }, []);
 
+  const handleManifestUpdate = useCallback((updatedManifest: VideoManifest) => {
+    setManifest(updatedManifest);
+  }, []);
+
   return (
     <main className="min-h-screen flex flex-col">
       {/* Header */}
@@ -155,6 +159,7 @@ export default function Home() {
             >
               <DirectorChat
                 onGenerateRequest={handleGenerate}
+                onManifestUpdate={handleManifestUpdate}
                 currentManifest={manifest}
                 isGenerating={isGenerating}
               />
@@ -183,7 +188,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-white/10 py-4">
         <div className="container mx-auto px-4 text-center text-xs text-zinc-500">
-          Built with Next.js 16, Remotion, and Gemini 2.0
+          Built with Next.js 16, Remotion 4.0, and Gemini 2.5 Flash
         </div>
       </footer>
     </main>

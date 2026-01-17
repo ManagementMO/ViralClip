@@ -1,16 +1,20 @@
 "use server";
 
 import { GoogleGenAI } from "@google/genai";
-import type {
-  VideoManifest,
-  GenerateVideoResponse,
-  ScrapedProduct,
-  Caption,
+import {
+  type VideoManifest,
+  type GenerateVideoResponse,
+  type ScrapedProduct,
+  type Caption,
+  type DirectorResponse,
+  type ThemeId,
+  THEME_PRESETS,
 } from "@/lib/types";
 import { MOCK_MANIFEST } from "@/lib/mock-data";
 import { generateId } from "@/lib/utils";
 import { scrapeProduct } from "@/lib/scraper";
 import { generateVideoVoiceover } from "@/lib/tts";
+import { processDirectorCommand, suggestTheme } from "@/lib/director";
 
 // Initialize Google GenAI client
 const getGenAI = () => {
@@ -163,33 +167,53 @@ export async function generateVideo(
     // Step 4: Generate voiceover audio (optional - requires API key)
     const ttsResult = await generateVideoVoiceover(script, style as "hype" | "minimal" | "luxury" | "playful");
 
-    // Step 5: Build video manifest
+    // Step 5: Determine theme based on style and product
+    const themeId: ThemeId = style === "luxury" ? "luxe" : style === "hype" ? "cyber" : suggestTheme(product.title);
+    const theme = THEME_PRESETS[themeId];
+
+    // Apply theme-appropriate transitions to clips
+    const themedClips = (clips.length > 0 ? clips : [
+      {
+        startFrame: 0,
+        duration: durationInFrames,
+        type: "image" as const,
+        url: product.image,
+        sourceStartTime: 0,
+      },
+    ]).map(clip => ({
+      ...clip,
+      transition: theme.transition,
+    }));
+
+    // Apply theme-appropriate styles to captions
+    const themedCaptions = captions.map(caption => ({
+      ...caption,
+      style: theme.textAnimation,
+    }));
+
+    // Step 6: Build video manifest
     const manifest: VideoManifest = {
       id: generateId(),
+      version: 1,
       script,
       audioUrl: ttsResult?.audioUrl,
       fps: 30,
       durationInFrames,
       width: 1080,
       height: 1920,
-      captions,
-      clips: clips.length > 0 ? clips : [
-        // Fallback to single product image if no images found
-        {
-          startFrame: 0,
-          duration: durationInFrames,
-          type: "image" as const,
-          url: product.image,
-          sourceStartTime: 0,
-        },
-      ],
+      captions: themedCaptions,
+      clips: themedClips,
       product: {
         title: product.title,
         price: product.price,
         image: product.image,
         description: product.description,
         url: productUrl,
+        videoUrl: product.videoUrl,
       },
+      theme,
+      musicVolume: 0.3,
+      voiceVolume: 1.0,
       createdAt: new Date().toISOString(),
     };
 
@@ -210,62 +234,62 @@ export async function sendChatMessage(
   message: string,
   context?: { productUrl?: string; currentManifest?: VideoManifest }
 ): Promise<{ response: string; action?: string; manifest?: VideoManifest }> {
-  const ai = getGenAI();
-
-  // Check for URL in message
+  // Check for URL in message - this triggers video generation
   const urlMatch = message.match(/https?:\/\/[^\s]+/);
 
-  if (!ai) {
-    // Demo mode without API key
-    if (urlMatch) {
-      return {
-        response:
-          "I found a product URL! Let me generate a viral video for it. (Running in demo mode)",
-        action: "generate",
-      };
-    }
+  if (urlMatch) {
     return {
       response:
-        "I'm your AI Director! Paste a Shopify product URL and I'll create a viral video for it. (Demo mode)",
+        "I found a product URL! Let me generate a viral video for it.",
+      action: "generate",
     };
   }
 
-  const systemContext = `You are an AI Video Director for ViralClip, helping merchants create viral marketing videos.
-Your personality: Creative, enthusiastic, knowledgeable about viral content and social media trends.
-
-Current context:
-- Product URL: ${context?.productUrl || "Not set"}
-- Has video: ${context?.currentManifest ? "Yes" : "No"}
-
-Your capabilities:
-1. Help users understand the video creation process
-2. Suggest improvements to their video
-3. Explain different styles (hype, minimal, luxury, playful)
-4. Detect product URLs and trigger video generation
-
-If the user's message contains a URL, respond with enthusiasm and indicate you'll start generating.
-Keep responses concise (2-3 sentences max).`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: `${systemContext}\n\nUser message: ${message}`,
-    });
-
-    const text = response.text?.trim() || "I'm here to help create viral videos!";
-
-    if (urlMatch) {
-      return {
-        response: text,
-        action: "generate",
-      };
-    }
-
-    return { response: text };
-  } catch {
+  // If we have a manifest, use the Director to process editing commands
+  if (context?.currentManifest) {
+    const result = await processDirectorCommand(message, context.currentManifest);
     return {
-      response:
-        "I had trouble processing that. Could you try again? Or paste a product URL to get started!",
+      response: result.message,
+      manifest: result.manifest,
+      action: result.actions.length > 0 ? "edit" : undefined,
     };
   }
+
+  // No manifest yet - guide user to paste a URL
+  return {
+    response:
+      "I'm your AI Director! Paste a Shopify or product URL and I'll create a viral video for it. Once generated, you can ask me to change the theme, adjust timing, or modify text.",
+  };
+}
+
+// Director edit action - directly process a command
+export async function directorEdit(
+  command: string,
+  manifest: VideoManifest
+): Promise<DirectorResponse> {
+  return processDirectorCommand(command, manifest);
+}
+
+// Quick theme switch
+export async function switchTheme(
+  manifest: VideoManifest,
+  themeId: ThemeId
+): Promise<VideoManifest> {
+  const theme = THEME_PRESETS[themeId];
+  if (!theme) return manifest;
+
+  return {
+    ...manifest,
+    theme,
+    clips: manifest.clips.map((clip) => ({
+      ...clip,
+      transition: theme.transition,
+    })),
+    captions: manifest.captions.map((caption) => ({
+      ...caption,
+      style: theme.textAnimation,
+    })),
+    version: (manifest.version || 1) + 1,
+    updatedAt: new Date().toISOString(),
+  };
 }

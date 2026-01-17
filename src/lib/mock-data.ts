@@ -15,11 +15,14 @@ export const MOCK_PRODUCT = {
 // Mock video manifest with "hype" style captions
 export const MOCK_MANIFEST: VideoManifest = {
   id: "demo-001",
+  version: 1,
   script: `Check out these INSANE wireless earbuds!
 Premium sound quality that will BLOW YOUR MIND.
 Active noise cancellation for the ultimate listening experience.
 Only $149.99 - Link in bio!`,
   audioUrl: undefined, // Will be populated by ElevenLabs
+  musicVolume: 0.3,
+  voiceVolume: 1.0,
   fps: 30,
   durationInFrames: 300, // 10 seconds at 30fps
   width: 1080,
@@ -30,30 +33,35 @@ Only $149.99 - Link in bio!`,
       endFrame: 60,
       text: "CHECK THIS OUT",
       style: "impact",
+      position: "center",
     },
     {
       startFrame: 60,
       endFrame: 120,
       text: "INSANE SOUND",
       style: "glitch",
+      position: "center",
     },
     {
       startFrame: 120,
       endFrame: 180,
       text: "PREMIUM QUALITY",
       style: "impact",
+      position: "center",
     },
     {
       startFrame: 180,
       endFrame: 240,
       text: "NOISE CANCELLING",
       style: "minimal",
+      position: "center",
     },
     {
       startFrame: 240,
       endFrame: 300,
       text: "ONLY $149.99",
       style: "impact",
+      position: "center",
     },
   ],
   clips: [
