@@ -1,0 +1,44 @@
+{
+  "name": "viralclip",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "remotion:studio": "remotion studio",
+    "remotion:build": "remotion render MyComposition out/video.mp4"
+  },
+  "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.31.0",
+    "@google/genai": "^1.37.0",
+    "@remotion/cli": "4.0.406",
+    "@remotion/player": "4.0.406",
+    "@remotion/zod-types": "4.0.406",
+    "@tailwindcss/postcss": "^4.1.18",
+    "ai": "^6.0.39",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.562.0",
+    "mongoose": "^9.1.4",
+    "motion": "^12.26.2",
+    "next": "16.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "4.0.406",
+    "tailwind-merge": "^3.3.0",
+    "twelvelabs-js": "^0.2.0",
+    "zod": "3.22.3"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.1.0",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.8.0"
+  }
+}
