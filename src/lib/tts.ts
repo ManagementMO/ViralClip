@@ -1,4 +1,4 @@
-const ELEVENLABS_API_KEY = process.env.ELEVEN_LABS_API_KEY;
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 
 // Default voice ID (Rachel - clear, professional female voice)
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";

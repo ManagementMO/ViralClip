@@ -25,7 +25,7 @@ const getGenAI = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-// Validate parsed captions from AI response
+// Validate and normalize parsed captions from AI response
 function validateCaptions(captions: unknown): captions is Caption[] {
   if (!Array.isArray(captions)) return false;
   return captions.every(
@@ -37,6 +37,14 @@ function validateCaptions(captions: unknown): captions is Caption[] {
       typeof c.text === "string" &&
       typeof c.style === "string"
   );
+}
+
+// Ensure all captions have a position field
+function normalizeCaptions(captions: Caption[]): Caption[] {
+  return captions.map(c => ({
+    ...c,
+    position: c.position || "center"
+  }));
 }
 
 // Generate script and captions using Gemini
@@ -72,19 +80,33 @@ Return ONLY a JSON object in this exact format (no markdown, no code blocks):
 {
   "script": "Full script as one string with line breaks",
   "captions": [
-    {"startFrame": 0, "endFrame": 60, "text": "LINE 1", "style": "impact"},
-    {"startFrame": 60, "endFrame": 120, "text": "LINE 2", "style": "glitch"},
-    {"startFrame": 120, "endFrame": 180, "text": "LINE 3", "style": "impact"},
-    {"startFrame": 180, "endFrame": 240, "text": "LINE 4", "style": "minimal"},
-    {"startFrame": 240, "endFrame": 300, "text": "PRICE LINE", "style": "impact"}
+    {"startFrame": 0, "endFrame": 60, "text": "LINE 1", "style": "impact", "position": "center"},
+    {"startFrame": 60, "endFrame": 120, "text": "LINE 2", "style": "glitch", "position": "center"},
+    {"startFrame": 120, "endFrame": 180, "text": "LINE 3", "style": "impact", "position": "center"},
+    {"startFrame": 180, "endFrame": 240, "text": "LINE 4", "style": "minimal", "position": "center"},
+    {"startFrame": 240, "endFrame": 300, "text": "PRICE LINE", "style": "impact", "position": "center"}
   ]
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
-    });
+    // Try gemini-2.0-flash first, fall back to gemini-1.5-flash if rate limited
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: prompt,
+      });
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'status' in e && e.status === 429) {
+        console.log("Rate limited on 2.0-flash, trying 1.5-flash...");
+        response = await ai.models.generateContent({
+          model: "gemini-1.5-flash",
+          contents: prompt,
+        });
+      } else {
+        throw e;
+      }
+    }
 
     const text = response.text?.trim() || "";
 
@@ -104,7 +126,7 @@ Return ONLY a JSON object in this exact format (no markdown, no code blocks):
         ) {
           return {
             script: parsed.script,
-            captions: parsed.captions,
+            captions: normalizeCaptions(parsed.captions),
           };
         }
       } catch {

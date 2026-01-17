@@ -346,10 +346,25 @@ export async function processDirectorCommand(
   // Use Gemini to process the command
   try {
     const prompt = buildDirectorPrompt(currentManifest);
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: `${prompt}\n\nUser command: ${userMessage}`,
-    });
+
+    // Try gemini-2.0-flash first, fall back to gemini-1.5-flash if rate limited
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: `${prompt}\n\nUser command: ${userMessage}`,
+      });
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'status' in e && e.status === 429) {
+        console.log("Rate limited on 2.0-flash, trying 1.5-flash...");
+        response = await ai.models.generateContent({
+          model: "gemini-1.5-flash",
+          contents: `${prompt}\n\nUser command: ${userMessage}`,
+        });
+      } else {
+        throw e;
+      }
+    }
 
     const text = response.text?.trim() || "";
     const parsed = extractJSON<{
