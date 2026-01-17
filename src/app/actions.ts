@@ -62,7 +62,10 @@ async function generateScriptWithGemini(
     };
   }
 
-  const prompt = `You are a viral video script writer for TikTok/Instagram Reels.
+  const prompt = `You are a viral video script writer for TikTok/Instagram Reels. 
+IMPORTANT: You ONLY answer questions related to creating viral video scripts and product marketing content for this ViralClip application. 
+You will NOT answer questions about any other topics. If asked about anything unrelated, respond with: "I can only help with ViralClip video script creation."
+
 Create a ${style} style script for this product:
 
 Product: ${product.title}

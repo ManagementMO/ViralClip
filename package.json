@@ -29,7 +29,7 @@
     "remotion": "4.0.406",
     "tailwind-merge": "^3.3.0",
     "twelvelabs-js": "^0.2.0",
-    "zod": "3.22.3"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.0",

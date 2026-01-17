@@ -362,11 +362,34 @@ export async function processDirectorCommand(
           contents: `${prompt}\n\nUser command: ${userMessage}`,
         });
       } else {
+        console.error("Gemini API error:", e);
         throw e;
       }
     }
 
-    const text = response.text?.trim() || "";
+    // Handle different response formats
+    let text = "";
+    if (typeof response.text === 'string') {
+      text = response.text.trim();
+    } else if (response.text) {
+      text = String(response.text).trim();
+    } else if (response.response?.text) {
+      text = response.response.text.trim();
+    } else {
+      console.error("Unexpected response format:", response);
+      throw new Error("Invalid response format from Gemini API");
+    }
+
+    if (!text) {
+      console.error("Empty response from Gemini API");
+      return {
+        manifest: currentManifest,
+        actions: [],
+        message:
+          "I received an empty response from the AI. Please try again.",
+      };
+    }
+
     const parsed = extractJSON<{
       actions?: DirectorAction[];
       message?: string;
@@ -374,6 +397,7 @@ export async function processDirectorCommand(
     }>(text);
 
     if (!parsed) {
+      console.error("Failed to parse JSON from response. Text:", text.substring(0, 500));
       return {
         manifest: currentManifest,
         actions: [],
@@ -386,93 +410,104 @@ export async function processDirectorCommand(
     let updatedManifest = { ...currentManifest };
 
     // Process each action
-    for (const action of parsed.actions || []) {
-      switch (action.type) {
-        case "change_theme": {
-          const themeId = action.payload?.themeId as ThemeId;
-          if (themeId && THEME_PRESETS[themeId]) {
-            updatedManifest = applyTheme(updatedManifest, themeId);
+    try {
+      for (const action of parsed.actions || []) {
+        switch (action.type) {
+          case "change_theme": {
+            const themeId = action.payload?.themeId as ThemeId;
+            if (themeId && THEME_PRESETS[themeId]) {
+              updatedManifest = applyTheme(updatedManifest, themeId);
+            }
+            break;
           }
-          break;
-        }
-        case "adjust_timing": {
-          const clipDuration = action.payload?.clipDuration as number;
-          if (clipDuration && clipDuration > 0) {
-            updatedManifest = adjustTiming(updatedManifest, clipDuration);
+          case "adjust_timing": {
+            const clipDuration = action.payload?.clipDuration as number;
+            if (clipDuration && clipDuration > 0) {
+              updatedManifest = adjustTiming(updatedManifest, clipDuration);
+            }
+            break;
           }
-          break;
-        }
-        case "update_text": {
-          const captionIndex = action.payload?.captionIndex as number;
-          const newText = action.payload?.newText as string;
-          if (typeof captionIndex === "number" && newText) {
-            updatedManifest = updateCaption(updatedManifest, captionIndex, newText);
+          case "update_text": {
+            const captionIndex = action.payload?.captionIndex as number;
+            const newText = action.payload?.newText as string;
+            if (typeof captionIndex === "number" && newText) {
+              updatedManifest = updateCaption(updatedManifest, captionIndex, newText);
+            }
+            break;
           }
-          break;
+          case "search_video": {
+            const query = action.payload?.query as string;
+            if (query) {
+              const result = await searchVideoSegment(updatedManifest, query);
+              updatedManifest = result.manifest;
+              if (result.found && result.segment) {
+                // Could add the found segment as a new clip
+              }
+            }
+            break;
+          }
         }
-        case "search_video": {
-          const query = action.payload?.query as string;
-          if (query) {
-            const result = await searchVideoSegment(updatedManifest, query);
-            updatedManifest = result.manifest;
-            if (result.found && result.segment) {
-              // Could add the found segment as a new clip
+      }
+
+      // Apply any direct manifest changes from AI
+      if (parsed.manifestChanges) {
+        // Handle theme changes
+        if (parsed.manifestChanges.theme) {
+          updatedManifest.theme = parsed.manifestChanges.theme as Theme;
+        }
+
+        // Handle caption updates
+        if (parsed.manifestChanges.captions) {
+          // Merge caption updates
+          const newCaptions = parsed.manifestChanges.captions;
+          if (Array.isArray(newCaptions) && newCaptions.length > 0) {
+            // If it's a partial update (fewer captions), merge with existing
+            if (newCaptions.length < updatedManifest.captions.length) {
+              updatedManifest.captions = updatedManifest.captions.map((caption, idx) =>
+                newCaptions[idx] ? { ...caption, ...newCaptions[idx] } : caption
+              );
+            } else {
+              updatedManifest.captions = newCaptions;
             }
           }
-          break;
         }
-      }
-    }
 
-    // Apply any direct manifest changes from AI
-    if (parsed.manifestChanges) {
-      // Handle theme changes
-      if (parsed.manifestChanges.theme) {
-        updatedManifest.theme = parsed.manifestChanges.theme as Theme;
-      }
+        // Handle clip updates
+        if (parsed.manifestChanges.clips) {
+          updatedManifest.clips = parsed.manifestChanges.clips;
+        }
 
-      // Handle caption updates
-      if (parsed.manifestChanges.captions) {
-        // Merge caption updates
-        const newCaptions = parsed.manifestChanges.captions;
-        if (Array.isArray(newCaptions) && newCaptions.length > 0) {
-          // If it's a partial update (fewer captions), merge with existing
-          if (newCaptions.length < updatedManifest.captions.length) {
-            updatedManifest.captions = updatedManifest.captions.map((caption, idx) =>
-              newCaptions[idx] ? { ...caption, ...newCaptions[idx] } : caption
-            );
-          } else {
-            updatedManifest.captions = newCaptions;
-          }
+        // Handle script updates
+        if (parsed.manifestChanges.script) {
+          updatedManifest.script = parsed.manifestChanges.script;
         }
       }
 
-      // Handle clip updates
-      if (parsed.manifestChanges.clips) {
-        updatedManifest.clips = parsed.manifestChanges.clips;
-      }
+      updatedManifest.version = (currentManifest.version || 1) + 1;
+      updatedManifest.updatedAt = new Date().toISOString();
 
-      // Handle script updates
-      if (parsed.manifestChanges.script) {
-        updatedManifest.script = parsed.manifestChanges.script;
-      }
+      return {
+        manifest: updatedManifest,
+        actions: parsed.actions || [],
+        message: parsed.message || "I've made the changes you requested!",
+      };
+    } catch (actionError) {
+      console.error("Error applying actions:", actionError);
+      return {
+        manifest: currentManifest,
+        actions: [],
+        message: "I encountered an error applying the changes. Please try again.",
+      };
     }
-
-    updatedManifest.version = (currentManifest.version || 1) + 1;
-    updatedManifest.updatedAt = new Date().toISOString();
-
-    return {
-      manifest: updatedManifest,
-      actions: parsed.actions || [],
-      message: parsed.message || "I've made the changes you requested!",
-    };
   } catch (error) {
     console.error("Director error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Full error details:", errorMessage);
     return {
       manifest: currentManifest,
       actions: [],
       message:
-        "I encountered an error processing your request. Please try again.",
+        `I encountered an error processing your request: ${errorMessage}. Please try again.`,
     };
   }
 }
