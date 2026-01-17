@@ -5,6 +5,7 @@ import {
   spring,
   interpolate,
   Img,
+  random,
 } from "remotion";
 
 interface ProductCardProps {
@@ -34,9 +35,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const translateY = interpolate(slideProgress, [0, 1], [200, 0]);
   const opacity = interpolate(slideProgress, [0, 0.5, 1], [0, 0.8, 1]);
 
-  // Glitch effect on price (subtle)
+  // Glitch effect on price (subtle, deterministic)
   const glitchActive = frame % 30 < 2;
-  const glitchOffset = glitchActive ? Math.random() * 4 - 2 : 0;
+  const glitchOffset = glitchActive ? random(`price-glitch-${frame}`) * 4 - 2 : 0;
 
   // Pulsing glow on price
   const glowIntensity = 0.5 + Math.sin(frame * 0.15) * 0.3;

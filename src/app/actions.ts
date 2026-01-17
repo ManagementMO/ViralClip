@@ -5,9 +5,10 @@ import type {
   VideoManifest,
   GenerateVideoResponse,
   ScrapedProduct,
+  Caption,
 } from "@/lib/types";
 import { MOCK_MANIFEST, MOCK_PRODUCT } from "@/lib/mock-data";
-import { generateId, secondsToFrames } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 
 // Initialize Google GenAI client
 const getGenAI = () => {
@@ -22,12 +23,26 @@ const getGenAI = () => {
 async function scrapeProduct(url: string): Promise<ScrapedProduct> {
   // In production, this would use Puppeteer or a scraping API
   // For now, return mock data with URL validation
-  console.log(`[Mock] Scraping product from: ${url}`);
+  void url; // Acknowledge parameter usage for future implementation
 
   return {
     ...MOCK_PRODUCT,
     images: [MOCK_PRODUCT.image],
   };
+}
+
+// Validate parsed captions from AI response
+function validateCaptions(captions: unknown): captions is Caption[] {
+  if (!Array.isArray(captions)) return false;
+  return captions.every(
+    (c) =>
+      typeof c === "object" &&
+      c !== null &&
+      typeof c.startFrame === "number" &&
+      typeof c.endFrame === "number" &&
+      typeof c.text === "string" &&
+      typeof c.style === "string"
+  );
 }
 
 // Generate script and captions using Gemini
@@ -38,7 +53,7 @@ async function generateScriptWithGemini(
   const ai = getGenAI();
 
   if (!ai) {
-    console.log("[Mock] No API key, returning mock captions");
+    // No API key - return mock data for demo mode
     return {
       script: MOCK_MANIFEST.script,
       captions: MOCK_MANIFEST.captions,
@@ -79,20 +94,37 @@ Return ONLY a JSON object in this exact format (no markdown, no code blocks):
 
     const text = response.text?.trim() || "";
 
-    // Try to parse JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    // Extract JSON using non-greedy match to find first complete object
+    const jsonMatch = text.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        script: parsed.script,
-        captions: parsed.captions,
-      };
+      try {
+        const parsed = JSON.parse(jsonMatch[0]) as {
+          script?: string;
+          captions?: unknown;
+        };
+
+        // Validate the parsed data
+        if (
+          typeof parsed.script === "string" &&
+          validateCaptions(parsed.captions)
+        ) {
+          return {
+            script: parsed.script,
+            captions: parsed.captions,
+          };
+        }
+      } catch {
+        // JSON parsing failed, fall through to mock data
+      }
     }
 
-    throw new Error("Could not parse Gemini response");
-  } catch (error) {
-    console.error("Gemini API error:", error);
-    // Fallback to mock data
+    // Fallback to mock data if parsing fails
+    return {
+      script: MOCK_MANIFEST.script,
+      captions: MOCK_MANIFEST.captions,
+    };
+  } catch {
+    // API error - fallback to mock data
     return {
       script: MOCK_MANIFEST.script,
       captions: MOCK_MANIFEST.captions,
@@ -107,24 +139,22 @@ export async function generateVideo(
 ): Promise<GenerateVideoResponse> {
   try {
     // Step 1: Scrape product details
-    console.log("Step 1: Scraping product...");
     const product = await scrapeProduct(productUrl);
 
     // Step 2: Generate script and captions with Gemini
-    console.log("Step 2: Generating script with AI...");
     const { script, captions } = await generateScriptWithGemini(product, style);
 
     // Step 3: Build video manifest
     const manifest: VideoManifest = {
       id: generateId(),
       script,
-      audioUrl: undefined, // Will be populated by ElevenLabs in Phase E
+      audioUrl: undefined,
       fps: 30,
-      durationInFrames: 300, // 10 seconds
+      durationInFrames: 300,
       width: 1080,
       height: 1920,
       captions,
-      clips: MOCK_MANIFEST.clips, // Use mock clips for now
+      clips: MOCK_MANIFEST.clips,
       product: {
         title: product.title,
         price: product.price,
@@ -140,10 +170,9 @@ export async function generateVideo(
       manifest,
     };
   } catch (error) {
-    console.error("Video generation error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error occurred",
+      error: error instanceof Error ? error.message : "Failed to generate video",
     };
   }
 }
@@ -155,22 +184,25 @@ export async function sendChatMessage(
 ): Promise<{ response: string; action?: string; manifest?: VideoManifest }> {
   const ai = getGenAI();
 
+  // Check for URL in message
+  const urlMatch = message.match(/https?:\/\/[^\s]+/);
+
   if (!ai) {
-    // Mock response without API key
-    if (message.toLowerCase().includes("http")) {
+    // Demo mode without API key
+    if (urlMatch) {
       return {
         response:
-          "I found a product URL in your message! Let me generate a viral video for it. (Note: Running in demo mode without API key)",
+          "I found a product URL! Let me generate a viral video for it. (Running in demo mode)",
         action: "generate",
       };
     }
     return {
       response:
-        "I'm your AI Director! Paste a Shopify product URL and I'll create a viral video for it. (Running in demo mode)",
+        "I'm your AI Director! Paste a Shopify product URL and I'll create a viral video for it. (Demo mode)",
     };
   }
 
-  const systemPrompt = `You are an AI Video Director for ViralClip, helping merchants create viral marketing videos.
+  const systemContext = `You are an AI Video Director for ViralClip, helping merchants create viral marketing videos.
 Your personality: Creative, enthusiastic, knowledgeable about viral content and social media trends.
 
 Current context:
@@ -189,16 +221,11 @@ Keep responses concise (2-3 sentences max).`;
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
-      contents: [
-        { role: "user", parts: [{ text: systemPrompt }] },
-        { role: "user", parts: [{ text: message }] },
-      ],
+      contents: `${systemContext}\n\nUser message: ${message}`,
     });
 
-    const text = response.text || "I'm here to help create viral videos!";
+    const text = response.text?.trim() || "I'm here to help create viral videos!";
 
-    // Check if message contains URL
-    const urlMatch = message.match(/https?:\/\/[^\s]+/);
     if (urlMatch) {
       return {
         response: text,
@@ -207,8 +234,7 @@ Keep responses concise (2-3 sentences max).`;
     }
 
     return { response: text };
-  } catch (error) {
-    console.error("Chat error:", error);
+  } catch {
     return {
       response:
         "I had trouble processing that. Could you try again? Or paste a product URL to get started!",

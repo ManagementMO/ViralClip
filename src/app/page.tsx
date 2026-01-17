@@ -2,14 +2,13 @@
 
 import { useState, useCallback } from "react";
 import { motion } from "motion/react";
-import { Zap, Video, Wand2 } from "lucide-react";
+import { Zap, Video, Wand2, ArrowLeft } from "lucide-react";
 import { DirectorChat } from "@/components/DirectorChat";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { ProductUrlInput } from "@/components/ProductUrlInput";
 import { generateVideo } from "@/app/actions";
 import { MOCK_MANIFEST } from "@/lib/mock-data";
 import type { VideoManifest } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 export default function Home() {
   const [manifest, setManifest] = useState<VideoManifest | null>(null);
@@ -28,9 +27,8 @@ export default function Home() {
       } else {
         setError(result.error || "Failed to generate video");
       }
-    } catch (err) {
-      setError("An unexpected error occurred");
-      console.error(err);
+    } catch {
+      setError("An unexpected error occurred. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -38,6 +36,11 @@ export default function Home() {
 
   const handleLoadDemo = useCallback(() => {
     setManifest(MOCK_MANIFEST);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    setManifest(null);
+    setError(null);
   }, []);
 
   return (
@@ -55,12 +58,22 @@ export default function Home() {
             </div>
           </div>
 
-          <button
-            onClick={handleLoadDemo}
-            className="px-4 py-2 text-sm bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors text-zinc-300 hover:text-white"
-          >
-            Load Demo
-          </button>
+          {manifest ? (
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors text-zinc-300 hover:text-white"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              New Video
+            </button>
+          ) : (
+            <button
+              onClick={handleLoadDemo}
+              className="px-4 py-2 text-sm bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors text-zinc-300 hover:text-white"
+            >
+              Load Demo
+            </button>
+          )}
         </div>
       </header>
 

@@ -16,7 +16,7 @@ export function formatPrice(price: number | string): string {
 }
 
 export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
 export function framesToSeconds(frames: number, fps: number = 30): number {

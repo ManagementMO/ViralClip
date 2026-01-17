@@ -1,11 +1,8 @@
 import {
   AbsoluteFill,
   Sequence,
-  useCurrentFrame,
   useVideoConfig,
   Video,
-  Img,
-  staticFile,
 } from "remotion";
 import type { VideoManifest } from "../src/lib/types";
 import { DynamicText } from "./components/DynamicText";
@@ -16,12 +13,18 @@ export const MyComposition: React.FC<VideoManifest> = ({
   clips = [],
   product,
 }) => {
-  const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
   // Ensure we have valid arrays to prevent rendering errors
   const safeClips = Array.isArray(clips) ? clips : [];
   const safeCaptions = Array.isArray(captions) ? captions : [];
+
+  // Default product values if not provided
+  const safeProduct = {
+    title: product?.title || "Product",
+    price: product?.price || "$0.00",
+    image: product?.image || "https://via.placeholder.com/400",
+  };
 
   return (
     <AbsoluteFill
@@ -104,9 +107,9 @@ export const MyComposition: React.FC<VideoManifest> = ({
       {/* Product card - appears at the end */}
       <Sequence from={Math.max(0, durationInFrames - 90)} durationInFrames={90}>
         <ProductCard
-          title={product.title}
-          price={product.price}
-          image={product.image}
+          title={safeProduct.title}
+          price={safeProduct.price}
+          image={safeProduct.image}
         />
       </Sequence>
 
