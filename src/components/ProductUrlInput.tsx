@@ -4,15 +4,17 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { Link2, Loader2, Sparkles, AlertCircle } from "lucide-react";
 import { cn, isValidUrl, isShopifyUrl } from "@/lib/utils";
+import { VoiceSelector, type VoiceId } from "@/components/VoiceSelector";
 
 interface ProductUrlInputProps {
-  onSubmit: (url: string) => void;
+  onSubmit: (url: string, voice: VoiceId) => void;
   isLoading: boolean;
 }
 
 export function ProductUrlInput({ onSubmit, isLoading }: ProductUrlInputProps) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [selectedVoice, setSelectedVoice] = useState<VoiceId>("hype");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +31,7 @@ export function ProductUrlInput({ onSubmit, isLoading }: ProductUrlInputProps) {
     }
 
     // Note: We accept any URL for demo, but could restrict to Shopify
-    onSubmit(url.trim());
+    onSubmit(url.trim(), selectedVoice);
   };
 
   const isShopify = url && isValidUrl(url) && isShopifyUrl(url);
@@ -94,6 +96,12 @@ export function ProductUrlInput({ onSubmit, isLoading }: ProductUrlInputProps) {
             {error}
           </motion.div>
         )}
+
+        {/* Voice Selector */}
+        <VoiceSelector
+          selectedVoice={selectedVoice}
+          onVoiceChange={setSelectedVoice}
+        />
 
         <button
           type="submit"

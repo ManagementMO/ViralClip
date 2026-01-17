@@ -15,12 +15,12 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = useCallback(async (url: string) => {
+  const handleGenerate = useCallback(async (url: string, voice: string = "hype") => {
     setIsGenerating(true);
     setError(null);
 
     try {
-      const result = await generateVideo(url);
+      const result = await generateVideo(url, "hype", voice);
 
       if (result.success && result.manifest) {
         setManifest(result.manifest);

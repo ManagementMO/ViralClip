@@ -3,34 +3,34 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 // Default voice ID (Rachel - clear, professional female voice)
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
 
-// Voice presets for different styles
+// Voice presets for different styles - All enthusiastic voices
 export const VOICE_PRESETS = {
   hype: {
-    voiceId: "pNInz6obpgDQGcFmaJgB", // Adam - energetic male
+    voiceId: "ErXwobaYiN019PkySvjV", // Antoni - enthusiastic male
     stability: 0.3,
     similarityBoost: 0.8,
-    style: 0.5,
+    style: 0.7,
     useSpeakerBoost: true,
   },
   minimal: {
-    voiceId: "21m00Tcm4TlvDq8ikWAM", // Rachel - calm female
-    stability: 0.7,
-    similarityBoost: 0.5,
-    style: 0.2,
-    useSpeakerBoost: false,
+    voiceId: "EXAVITQu4vr4xnSDxMaL", // Bella - enthusiastic female
+    stability: 0.3,
+    similarityBoost: 0.8,
+    style: 0.7,
+    useSpeakerBoost: true,
   },
   luxury: {
-    voiceId: "D38z5RcWu1voky8WS1ja", // Fin - sophisticated male
-    stability: 0.6,
-    similarityBoost: 0.6,
-    style: 0.3,
-    useSpeakerBoost: false,
+    voiceId: "onwK4e9ZLuTAKqWW03F9", // Daniel - enthusiastic male (British)
+    stability: 0.3,
+    similarityBoost: 0.8,
+    style: 0.7,
+    useSpeakerBoost: true,
   },
   playful: {
-    voiceId: "jBpfuIE2acCO8z3wKNLl", // Gigi - cheerful female
-    stability: 0.4,
-    similarityBoost: 0.7,
-    style: 0.6,
+    voiceId: "XB0fDUnXU5powFXDhCwa", // Charlotte - British enthusiastic female
+    stability: 0.2,
+    similarityBoost: 0.9,
+    style: 0.9,
     useSpeakerBoost: true,
   },
 };
@@ -51,6 +51,19 @@ export async function generateSpeech(
   }
 
   const preset = VOICE_PRESETS[style] || VOICE_PRESETS.hype;
+  
+  return generateSpeechByPreset(text, preset);
+}
+
+// Generate speech using a specific preset object
+export async function generateSpeechByPreset(
+  text: string,
+  preset: typeof VOICE_PRESETS[keyof typeof VOICE_PRESETS]
+): Promise<TTSResult | null> {
+  if (!ELEVENLABS_API_KEY) {
+    console.log("No ElevenLabs API key configured - skipping TTS");
+    return null;
+  }
 
   try {
     const response = await fetch(
@@ -102,6 +115,15 @@ export async function generateSpeech(
   }
 }
 
+// Limit text to maximum number of words
+function limitWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) {
+    return text.trim();
+  }
+  return words.slice(0, maxWords).join(" ");
+}
+
 // Generate speech optimized for short-form video (faster pacing)
 export async function generateVideoVoiceover(
   script: string,
@@ -113,5 +135,8 @@ export async function generateVideoVoiceover(
     .replace(/\s+/g, " ")
     .trim();
 
-  return generateSpeech(cleanScript, style);
+  // Limit to 10 words max for ElevenLabs
+  const limitedScript = limitWords(cleanScript, 10);
+
+  return generateSpeech(limitedScript, style);
 }

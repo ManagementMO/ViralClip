@@ -176,7 +176,8 @@ function generateClipsFromImages(
 // Main video generation action
 export async function generateVideo(
   productUrl: string,
-  style: string = "hype"
+  style: string = "hype",
+  voice: string = "hype"
 ): Promise<GenerateVideoResponse> {
   try {
     // Step 1: Scrape product details
@@ -190,7 +191,7 @@ export async function generateVideo(
     const clips = generateClipsFromImages(product.images, durationInFrames);
 
     // Step 4: Generate voiceover audio (optional - requires API key)
-    const ttsResult = await generateVideoVoiceover(script, style as "hype" | "minimal" | "luxury" | "playful");
+    const ttsResult = await generateVideoVoiceover(script, voice as "hype" | "minimal" | "luxury" | "playful");
 
     // Step 5: Determine theme based on style and product
     const themeId: ThemeId = style === "luxury" ? "luxe" : style === "hype" ? "cyber" : suggestTheme(product.title);
