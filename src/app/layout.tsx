@@ -13,7 +13,7 @@ const oswald = Oswald({
 });
 
 export const metadata: Metadata = {
-  title: "ViralClip - AI Video Engine for Shopify",
+  title: "Clippify - AI Video Engine for Shopify",
   description: "Generate viral marketing videos for your Shopify products with AI",
 };
 

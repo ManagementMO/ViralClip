@@ -163,12 +163,24 @@ const VideoClip: React.FC<{
 }> = ({ clip, theme }) => {
   const { fps } = useVideoConfig();
   const frame = useCurrentFrame();
+  const [hasError, setHasError] = useState(false);
+
+  // Debug logging
+  if (frame === 0 || frame === 30) {
+    console.log("[VideoClip] Frame:", frame, "Video URL:", clip.url, "Type:", clip.type, "Error:", hasError);
+  }
 
   const progress = interpolate(frame, [0, clip.duration], [0, 1], {
     extrapolateRight: "clamp",
   });
 
   const transition = clip.transition || theme.transition;
+
+  // Handle error - show themed background fallback
+  if (hasError || !clip.url) {
+    console.error("[VideoClip] Video failed to load or no URL:", clip.url);
+    return <ThemedBackground theme={theme} />;
+  }
 
   return (
     <TransitionEffect type={transition} progress={progress}>
@@ -179,6 +191,11 @@ const VideoClip: React.FC<{
           width: "100%",
           height: "100%",
           objectFit: "cover",
+        }}
+        pauseWhenLoading
+        onError={(e) => {
+          console.error("[VideoClip] Video error:", clip.url, e);
+          setHasError(true);
         }}
       />
     </TransitionEffect>

@@ -89,7 +89,7 @@ export const MOCK_CHAT_HISTORY: ChatMessage[] = [
   {
     id: "1",
     role: "system",
-    content: "Welcome to ViralClip! I'm your AI Director. Paste a Shopify product URL to get started.",
+    content: "Welcome to Clippify! I'm your AI Director. Paste a Shopify product URL to get started.",
     timestamp: new Date(),
   },
 ];

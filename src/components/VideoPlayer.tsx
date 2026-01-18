@@ -17,6 +17,8 @@ export function VideoPlayer({ manifest }: VideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [showDownloadHint, setShowDownloadHint] = useState(false);
+  const wasPlayingBeforeUpdate = useRef(false);
+  const previousVersionRef = useRef(manifest.version || 1);
 
   // Generate a stable key for the player based on manifest version and id
   const playerKey = useMemo(
@@ -24,13 +26,26 @@ export function VideoPlayer({ manifest }: VideoPlayerProps) {
     [manifest.id, manifest.version]
   );
 
+  // Track playing state before manifest version changes
+  useEffect(() => {
+    const currentVersion = manifest.version || 1;
+    if (currentVersion !== previousVersionRef.current) {
+      // Version changed - save current playing state
+      wasPlayingBeforeUpdate.current = isPlaying;
+      previousVersionRef.current = currentVersion;
+    }
+  }, [manifest.version, isPlaying]);
+
   useEffect(() => {
     const player = playerRef.current;
     if (!player) return;
 
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
-    const onEnded = () => setIsPlaying(false);
+    const onEnded = () => {
+      setIsPlaying(false);
+      wasPlayingBeforeUpdate.current = false;
+    };
     const onFrameUpdate = (e: { detail: { frame: number } }) => {
       setCurrentFrame(e.detail.frame);
     };
@@ -39,6 +54,26 @@ export function VideoPlayer({ manifest }: VideoPlayerProps) {
     player.addEventListener("pause", onPause);
     player.addEventListener("ended", onEnded);
     player.addEventListener("frameupdate", onFrameUpdate);
+
+    // If the video was playing before the manifest update, resume playback
+    if (wasPlayingBeforeUpdate.current) {
+      // Small delay to ensure player is fully mounted
+      const timeoutId = setTimeout(() => {
+        player.seekTo(0);
+        player.play().catch((err) => {
+          console.error("Failed to auto-play after manifest update:", err);
+        });
+        wasPlayingBeforeUpdate.current = false;
+      }, 150);
+
+      return () => {
+        clearTimeout(timeoutId);
+        player.removeEventListener("play", onPlay);
+        player.removeEventListener("pause", onPause);
+        player.removeEventListener("ended", onEnded);
+        player.removeEventListener("frameupdate", onFrameUpdate);
+      };
+    }
 
     return () => {
       player.removeEventListener("play", onPlay);

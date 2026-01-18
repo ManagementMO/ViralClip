@@ -57,7 +57,7 @@ export default function Home() {
               <Zap className="w-6 h-6 text-black" />
             </div>
             <div>
-              <h1 className="text-xl font-bold gradient-text">ViralClip</h1>
+              <h1 className="text-xl font-bold gradient-text">Clippify</h1>
               <p className="text-xs text-zinc-500">AI Video Engine</p>
             </div>
           </div>
@@ -93,7 +93,8 @@ export default function Home() {
               className="text-center space-y-4 max-w-2xl"
             >
               <h2 className="text-4xl md:text-5xl font-bold">
-                Turn Products into{" "}
+                Turn Products into
+                <br />
                 <span className="gradient-text">Viral Videos</span>
               </h2>
               <p className="text-lg text-zinc-400">

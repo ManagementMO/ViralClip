@@ -63,8 +63,8 @@ async function generateScriptWithGemini(
   }
 
   const prompt = `You are a viral video script writer for TikTok/Instagram Reels. 
-IMPORTANT: You ONLY answer questions related to creating viral video scripts and product marketing content for this ViralClip application. 
-You will NOT answer questions about any other topics. If asked about anything unrelated, respond with: "I can only help with ViralClip video script creation."
+IMPORTANT: You ONLY answer questions related to creating viral video scripts and product marketing content for this Clippify application. 
+You will NOT answer questions about any other topics. If asked about anything unrelated, respond with: "I can only help with Clippify video script creation."
 
 Create a ${style} style script for this product:
 
@@ -209,9 +209,27 @@ export async function generateVideo(
     const product = await scrapeProduct(productUrl);
     console.log("[DEBUG] Scraped product:", JSON.stringify(product, null, 2));
 
-    // Step 2: Generate script and captions with Gemini
+    // Step 2: Generate script and captions with Gemini (or use hardcoded captions for specific URLs)
     console.log("[DEBUG] Generating script...");
-    const { script, captions } = await generateScriptWithGemini(product, style);
+    let script: string;
+    let captions: VideoManifest["captions"];
+    
+    // Check if this is the clippify store
+    const isClippifyStore = productUrl.includes("clippify-2.myshopify.com");
+    
+    // Hardcoded captions for clippify-2.myshopify.com
+    if (isClippifyStore) {
+      console.log("[DEBUG] Using hardcoded captions for clippify-2.myshopify.com");
+      script = "uoft jewels has LAUNCHED. made to shine with you";
+      captions = [
+        { startFrame: 0, endFrame: 150, text: "uoft jewels has LAUNCHED", style: "impact", position: "center" },
+        { startFrame: 150, endFrame: 300, text: "made to shine with you", style: "impact", position: "center" },
+      ];
+    } else {
+      const generated = await generateScriptWithGemini(product, style);
+      script = generated.script;
+      captions = generated.captions;
+    }
     console.log("[DEBUG] Script:", script);
     console.log("[DEBUG] Captions:", JSON.stringify(captions, null, 2));
 
@@ -223,7 +241,8 @@ export async function generateVideo(
 
     // Step 4: Generate voiceover audio (optional - requires API key)
     console.log("[DEBUG] Generating TTS for script:", script.substring(0, 50) + "...");
-    const ttsResult = await generateVideoVoiceover(script, voice as "hype" | "minimal" | "luxury" | "playful");
+    // Skip word limit for clippify store to use full script
+    const ttsResult = await generateVideoVoiceover(script, voice as "hype" | "minimal" | "luxury" | "playful", isClippifyStore);
     console.log("[DEBUG] TTS result:", ttsResult ? "Audio generated" : "No audio (check API key)");
 
     // Step 5: Determine theme based on style and product

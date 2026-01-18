@@ -68,7 +68,7 @@ export async function generateSpeechByPreset(
     console.log("No ElevenLabs API key configured - skipping TTS");
     return null;
   }
-  console.log("[TTS] Using voice preset:", style, "voice ID:", preset.voiceId);
+  console.log("[TTS] Using voice preset with voice ID:", preset.voiceId);
 
   try {
     console.log("[TTS] Calling ElevenLabs API...");
@@ -137,7 +137,8 @@ function limitWords(text: string, maxWords: number): string {
 // Generate speech optimized for short-form video (faster pacing)
 export async function generateVideoVoiceover(
   script: string,
-  style: keyof typeof VOICE_PRESETS = "hype"
+  style: keyof typeof VOICE_PRESETS = "hype",
+  skipWordLimit: boolean = false
 ): Promise<TTSResult | null> {
   // Clean up the script for TTS
   const cleanScript = script
@@ -145,8 +146,8 @@ export async function generateVideoVoiceover(
     .replace(/\s+/g, " ")
     .trim();
 
-  // Limit to 10 words max for ElevenLabs
-  const limitedScript = limitWords(cleanScript, 10);
+  // Limit to 10 words max for ElevenLabs (unless skipWordLimit is true)
+  const limitedScript = skipWordLimit ? cleanScript : limitWords(cleanScript, 10);
 
   return generateSpeech(limitedScript, style);
 }

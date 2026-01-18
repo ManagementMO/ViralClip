@@ -63,7 +63,7 @@ async function scrapeShopify(url: string): Promise<ScrapedProduct | null> {
     const productJsonUrl = url.replace(/\/?$/, ".json");
     const jsonResponse = await fetch(productJsonUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; ViralClip/1.0)",
+        "User-Agent": "Mozilla/5.0 (compatible; Clippify/1.0)",
       },
     });
 

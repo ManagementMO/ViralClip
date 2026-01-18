@@ -59,7 +59,7 @@ function extractJSON<T>(text: string): T | null {
 
 // Build the Director system prompt
 function buildDirectorPrompt(manifest: VideoManifest): string {
-  return `You are the AI Director for ViralClip, a video editing AI. You modify video projects through natural language.
+  return `You are the AI Director for Clippify, a video editing AI. You modify video projects through natural language.
 
 VIDEO STRUCTURE (IMPORTANT - understand what each element controls):
 1. **CAPTIONS** - The MAIN animated text that appears throughout the video. This is the PRIMARY content users see.
@@ -553,11 +553,9 @@ export async function processDirectorCommand(
         const status = e && typeof e === 'object' && 'status' in e ? e.status : null;
         console.log(`[DIRECTOR] Model ${model} failed with status: ${status}`);
         if (status !== 429 && status !== 503) {
+          console.error("Gemini API error:", e);
           throw e;
         }
-      } else {
-        console.error("Gemini API error:", e);
-        throw e;
       }
     }
 
