@@ -14,7 +14,7 @@ import {
   createMockVideoIndex,
 } from "./twelvelabs";
 
-// Initialize Google GenAI client with Gemini 2.5 Flash
+// Initialize Google GenAI client with Gemini 3 Flash
 const getGenAI = () => {
   const apiKey = process.env.GOOGLE_GENAI_API_KEY;
   if (!apiKey) return null;
@@ -61,70 +61,91 @@ function extractJSON<T>(text: string): T | null {
 function buildDirectorPrompt(manifest: VideoManifest): string {
   return `You are the AI Director for ViralClip, a video editing AI. You modify video projects through natural language.
 
-CURRENT VIDEO MANIFEST:
-${JSON.stringify(manifest, null, 2)}
+VIDEO STRUCTURE (IMPORTANT - understand what each element controls):
+1. **CAPTIONS** - The MAIN animated text that appears throughout the video. This is the PRIMARY content users see.
+   - These are the big, animated words that appear on screen (e.g., "CHECK THIS OUT", "INSANE SOUND", "ONLY $149.99")
+   - Each caption has: startFrame, endFrame, text, style, position
+   - **Per-caption style overrides** (optional): color, fontSize, fontWeight, fontFamily
+     - These override the theme for specific captions only
+
+2. **THEME** - Controls the DEFAULT visual style of captions (can be overridden per-caption)
+   - When users say "make it luxurious", "add energy", "make it minimal" - change THEME
+
+3. **CLIPS** - Background images/videos (only modify if user mentions "background")
+
+4. **PRODUCT** - End card (DO NOT modify unless explicitly asked)
+
+CURRENT CAPTIONS:
+${JSON.stringify(manifest.captions, null, 2)}
+
+CURRENT THEME: ${manifest.theme?.id || "cyber"} (colors: ${manifest.theme?.primaryColor || "#00ff88"}, font: ${manifest.theme?.fontFamily || "Oswald"})
 
 AVAILABLE THEMES:
-- cyber: Neon green/pink, fast cuts, glitch effects, techno music, Oswald font
-- luxe: Gold/black, slow elegant fades, Ken Burns zoom, classical music, Playfair Display font
-- minimal: White/gray, clean slides, typewriter text, lofi music, Inter font
+- cyber: Neon green (#00ff88), pink (#ff0066), Oswald font - HIGH ENERGY
+- luxe: Gold (#d4af37), black, Playfair Display font - PREMIUM
+- minimal: White (#ffffff), gray, Inter font - CLEAN
 
 AVAILABLE ACTIONS:
-1. change_theme: Switch to a different theme preset
-2. update_clip: Modify a specific clip (timing, source)
-3. search_video: Find a specific moment in the video (requires TwelveLabs)
-4. change_music: Change background music genre
-5. update_text: Modify captions or script text
-6. adjust_timing: Change clip/caption durations
-7. regenerate_script: Create new script content
+1. change_theme: Switch entire theme
+2. update_text: Change caption text
+3. style_caption: Customize individual caption appearance (color, fontSize, fontWeight, fontFamily)
+4. adjust_timing: Change pacing
+
+CAPTION STYLE OPTIONS (for style_caption action):
+- color: Any CSS color (e.g., "#ff0000", "red", "#00ff88")
+- fontSize: CSS font size (e.g., "72px", "96px", "clamp(48px, 10vw, 120px)")
+- fontWeight: Number 100-900 (400=normal, 700=bold, 900=black)
+- fontFamily: Font name (e.g., "Arial", "Oswald", "Impact", "Playfair Display")
 
 RESPONSE FORMAT:
-Return ONLY a JSON object with this structure:
+Return ONLY a JSON object:
 {
-  "actions": [
-    {
-      "type": "action_type",
-      "payload": { /* action-specific data */ },
-      "reasoning": "Why you're making this change"
-    }
-  ],
-  "message": "Friendly response to the user explaining what you did",
-  "manifestChanges": {
-    // Only include fields that need to change
-    // e.g., "theme": { full theme object }
-  }
+  "actions": [{"type": "action_type", "payload": {...}, "reasoning": "..."}],
+  "message": "Friendly response explaining what you changed",
+  "manifestChanges": { /* only fields that change */ }
 }
 
 EXAMPLES:
 
 User: "Make it feel more luxurious"
 {
-  "actions": [{"type": "change_theme", "payload": {"themeId": "luxe"}, "reasoning": "User wants luxury aesthetic"}],
-  "message": "I've switched to the Luxe theme - elegant gold tones, smooth fades, and classical background music. The Ken Burns effect will add a cinematic touch.",
+  "actions": [{"type": "change_theme", "payload": {"themeId": "luxe"}, "reasoning": "Applying luxury theme"}],
+  "message": "I've applied the Luxe theme! Elegant gold tones and smooth fades.",
   "manifestChanges": {"theme": ${JSON.stringify(THEME_PRESETS.luxe)}}
 }
 
-User: "Speed up the cuts"
+User: "Make the text red"
 {
-  "actions": [{"type": "adjust_timing", "payload": {"clipDuration": 30}, "reasoning": "Faster cuts requested"}],
-  "message": "Done! I've shortened each clip to create a faster, more dynamic pace.",
-  "manifestChanges": {"theme": {"clipDuration": 30}}
+  "actions": [{"type": "style_caption", "payload": {"allCaptions": true, "color": "#ff0000"}, "reasoning": "User wants red text"}],
+  "message": "Done! All captions are now red.",
+  "manifestChanges": {"captions": ${JSON.stringify(manifest.captions.map(c => ({ ...c, color: "#ff0000" })))}}
 }
 
-User: "Change the first line to SAY GOODBYE TO BORING"
+User: "Make the first caption bigger and blue"
 {
-  "actions": [{"type": "update_text", "payload": {"captionIndex": 0, "newText": "SAY GOODBYE TO BORING"}, "reasoning": "User requested text change"}],
-  "message": "Updated! The opening line now reads 'SAY GOODBYE TO BORING'.",
-  "manifestChanges": {"captions": [{"startFrame": 0, "endFrame": 60, "text": "SAY GOODBYE TO BORING", "style": "impact", "position": "center"}]}
+  "actions": [{"type": "style_caption", "payload": {"captionIndex": 0, "color": "#0088ff", "fontSize": "96px"}, "reasoning": "Custom style for first caption"}],
+  "message": "The first caption is now larger and blue!",
+  "manifestChanges": {"captions": [{"startFrame": 0, "endFrame": 60, "text": "${manifest.captions[0]?.text || "TEXT"}", "style": "${manifest.captions[0]?.style || "impact"}", "position": "center", "color": "#0088ff", "fontSize": "96px"}]}
 }
 
-Be creative but precise. Only modify what the user asks for. Always explain your changes.`;
+User: "Use Impact font for all text"
+{
+  "actions": [{"type": "style_caption", "payload": {"allCaptions": true, "fontFamily": "Impact"}, "reasoning": "User wants Impact font"}],
+  "message": "All captions now use the Impact font!",
+  "manifestChanges": {"captions": ${JSON.stringify(manifest.captions.map(c => ({ ...c, fontFamily: "Impact" })))}}
+}
+
+IMPORTANT: For style changes like color/font/size, use style_caption action and update the captions array in manifestChanges.`;
 }
 
 // Apply theme changes to manifest
 function applyTheme(manifest: VideoManifest, themeId: ThemeId): VideoManifest {
   const theme = THEME_PRESETS[themeId];
   if (!theme) return manifest;
+
+  console.log("[DIRECTOR] Applying theme:", themeId);
+  console.log("[DIRECTOR] Theme colors:", theme.primaryColor, theme.secondaryColor);
+  console.log("[DIRECTOR] Theme textAnimation:", theme.textAnimation);
 
   // Update clips with theme-appropriate transition
   const updatedClips = manifest.clips.map((clip) => ({
@@ -143,6 +164,7 @@ function applyTheme(manifest: VideoManifest, themeId: ThemeId): VideoManifest {
     theme,
     clips: updatedClips,
     captions: updatedCaptions,
+    version: (manifest.version || 1) + 1,  // INCREMENT VERSION for re-render
     updatedAt: new Date().toISOString(),
   };
 }
@@ -154,6 +176,8 @@ function adjustTiming(
 ): VideoManifest {
   const numClips = manifest.clips.length;
   if (numClips === 0) return manifest;
+
+  console.log("[DIRECTOR] Adjusting timing, clip duration:", clipDuration);
 
   const totalFrames = manifest.durationInFrames;
   const actualClipDuration = Math.min(clipDuration, Math.floor(totalFrames / numClips));
@@ -167,6 +191,7 @@ function adjustTiming(
   return {
     ...manifest,
     clips: updatedClips,
+    version: (manifest.version || 1) + 1,  // INCREMENT VERSION for re-render
     updatedAt: new Date().toISOString(),
   };
 }
@@ -181,6 +206,8 @@ function updateCaption(
     return manifest;
   }
 
+  console.log("[DIRECTOR] Updating caption", captionIndex, "to:", newText);
+
   const updatedCaptions = [...manifest.captions];
   updatedCaptions[captionIndex] = {
     ...updatedCaptions[captionIndex],
@@ -194,6 +221,7 @@ function updateCaption(
     ...manifest,
     captions: updatedCaptions,
     script,
+    version: (manifest.version || 1) + 1,  // INCREMENT VERSION for re-render
     updatedAt: new Date().toISOString(),
   };
 }
@@ -250,96 +278,255 @@ export async function processDirectorCommand(
   currentManifest: VideoManifest
 ): Promise<DirectorResponse> {
   const ai = getGenAI();
+  const lowerMessage = userMessage.toLowerCase();
 
-  // Default response for demo mode
+  console.log("[DIRECTOR] Processing command:", userMessage);
+  console.log("[DIRECTOR] Has Gemini API:", !!ai);
+
+  // Demo mode OR Gemini mode - check common commands first for speed
+  // This also serves as fallback if Gemini fails
+
+  // Luxury/Premium theme keywords
+  if (lowerMessage.includes("luxe") ||
+      lowerMessage.includes("luxur") ||  // matches luxury, luxurious
+      lowerMessage.includes("premium") ||
+      lowerMessage.includes("elegant") ||
+      lowerMessage.includes("gold")) {
+    console.log("[DIRECTOR] Matched: luxury theme");
+    const updatedManifest = applyTheme(currentManifest, "luxe");
+    return {
+      manifest: updatedManifest,
+      actions: [
+        {
+          type: "change_theme",
+          payload: { themeId: "luxe" },
+          reasoning: "User requested luxury aesthetic",
+        },
+      ],
+      message:
+        "I've applied the Luxe theme! Gold tones, elegant fades, and Ken Burns zoom effects for a premium feel.",
+    };
+  }
+
+  // Cyber/Energetic theme keywords
+  if (lowerMessage.includes("cyber") ||
+      lowerMessage.includes("neon") ||
+      lowerMessage.includes("energy") ||  // matches energy, energetic
+      lowerMessage.includes("hype") ||
+      lowerMessage.includes("intense") ||
+      lowerMessage.includes("vibrant")) {
+    console.log("[DIRECTOR] Matched: cyber theme");
+    const updatedManifest = applyTheme(currentManifest, "cyber");
+    return {
+      manifest: updatedManifest,
+      actions: [
+        {
+          type: "change_theme",
+          payload: { themeId: "cyber" },
+          reasoning: "User requested energetic/cyberpunk aesthetic",
+        },
+      ],
+      message:
+        "Switched to Cyber theme! Neon colors, glitch effects, and fast cuts for maximum energy.",
+    };
+  }
+
+  // Minimal/Clean theme keywords
+  if (lowerMessage.includes("minimal") ||
+      lowerMessage.includes("clean") ||
+      lowerMessage.includes("simple") ||
+      lowerMessage.includes("subtle") ||
+      lowerMessage.includes("calm")) {
+    console.log("[DIRECTOR] Matched: minimal theme");
+    const updatedManifest = applyTheme(currentManifest, "minimal");
+    return {
+      manifest: updatedManifest,
+      actions: [
+        {
+          type: "change_theme",
+          payload: { themeId: "minimal" },
+          reasoning: "User requested minimal aesthetic",
+        },
+      ],
+      message:
+        "Applied Minimal theme! Clean slides, typewriter text, and lofi vibes.",
+    };
+  }
+
+  // Faster pacing keywords
+  if (lowerMessage.includes("faster") ||
+      lowerMessage.includes("speed up") ||
+      lowerMessage.includes("quicker") ||
+      lowerMessage.includes("rapid")) {
+    console.log("[DIRECTOR] Matched: faster timing");
+    const updatedManifest = adjustTiming(currentManifest, 30);
+    return {
+      manifest: updatedManifest,
+      actions: [
+        {
+          type: "adjust_timing",
+          payload: { clipDuration: 30 },
+          reasoning: "User wants faster pace",
+        },
+      ],
+      message: "Done! Clips are now faster for a more dynamic feel.",
+    };
+  }
+
+  // Slower pacing keywords
+  if (lowerMessage.includes("slower") ||
+      lowerMessage.includes("slow down") ||
+      lowerMessage.includes("calm") ||
+      lowerMessage.includes("relaxed")) {
+    console.log("[DIRECTOR] Matched: slower timing");
+    const updatedManifest = adjustTiming(currentManifest, 90);
+    return {
+      manifest: updatedManifest,
+      actions: [
+        {
+          type: "adjust_timing",
+          payload: { clipDuration: 90 },
+          reasoning: "User wants slower pace",
+        },
+      ],
+      message:
+        "Slowed things down for a more cinematic, luxurious feel.",
+    };
+  }
+
+  // Color keywords - apply to all captions
+  const colorKeywords: Record<string, string> = {
+    "red": "#ff0000",
+    "blue": "#0088ff",
+    "green": "#00ff88",
+    "yellow": "#ffff00",
+    "orange": "#ff8800",
+    "pink": "#ff00aa",
+    "purple": "#aa00ff",
+    "white": "#ffffff",
+    "black": "#000000",
+    "cyan": "#00ffff",
+    "magenta": "#ff00ff",
+  };
+
+  for (const [colorName, colorHex] of Object.entries(colorKeywords)) {
+    if (lowerMessage.includes(colorName) &&
+        (lowerMessage.includes("text") || lowerMessage.includes("caption") || lowerMessage.includes("color"))) {
+      console.log("[DIRECTOR] Matched: color change to", colorName);
+      const updatedCaptions = currentManifest.captions.map(c => ({ ...c, color: colorHex }));
+      return {
+        manifest: {
+          ...currentManifest,
+          captions: updatedCaptions,
+          version: (currentManifest.version || 1) + 1,
+          updatedAt: new Date().toISOString(),
+        },
+        actions: [
+          {
+            type: "style_caption",
+            payload: { allCaptions: true, color: colorHex },
+            reasoning: `User wants ${colorName} text`,
+          },
+        ],
+        message: `Done! All captions are now ${colorName}.`,
+      };
+    }
+  }
+
+  // Font size keywords
+  if (lowerMessage.includes("bigger") || lowerMessage.includes("larger")) {
+    console.log("[DIRECTOR] Matched: bigger text");
+    const updatedCaptions = currentManifest.captions.map(c => ({ ...c, fontSize: "clamp(64px, 12vw, 120px)" }));
+    return {
+      manifest: {
+        ...currentManifest,
+        captions: updatedCaptions,
+        version: (currentManifest.version || 1) + 1,
+        updatedAt: new Date().toISOString(),
+      },
+      actions: [
+        {
+          type: "style_caption",
+          payload: { allCaptions: true, fontSize: "clamp(64px, 12vw, 120px)" },
+          reasoning: "User wants bigger text",
+        },
+      ],
+      message: "Made all captions bigger!",
+    };
+  }
+
+  if (lowerMessage.includes("smaller")) {
+    console.log("[DIRECTOR] Matched: smaller text");
+    const updatedCaptions = currentManifest.captions.map(c => ({ ...c, fontSize: "clamp(32px, 5vw, 48px)" }));
+    return {
+      manifest: {
+        ...currentManifest,
+        captions: updatedCaptions,
+        version: (currentManifest.version || 1) + 1,
+        updatedAt: new Date().toISOString(),
+      },
+      actions: [
+        {
+          type: "style_caption",
+          payload: { allCaptions: true, fontSize: "clamp(32px, 5vw, 48px)" },
+          reasoning: "User wants smaller text",
+        },
+      ],
+      message: "Made all captions smaller!",
+    };
+  }
+
+  // Font weight keywords
+  if (lowerMessage.includes("bolder") || lowerMessage.includes("thicker")) {
+    console.log("[DIRECTOR] Matched: bolder text");
+    const updatedCaptions = currentManifest.captions.map(c => ({ ...c, fontWeight: 900 }));
+    return {
+      manifest: {
+        ...currentManifest,
+        captions: updatedCaptions,
+        version: (currentManifest.version || 1) + 1,
+        updatedAt: new Date().toISOString(),
+      },
+      actions: [
+        {
+          type: "style_caption",
+          payload: { allCaptions: true, fontWeight: 900 },
+          reasoning: "User wants bolder text",
+        },
+      ],
+      message: "Made all captions bolder!",
+    };
+  }
+
+  if (lowerMessage.includes("thinner") || lowerMessage.includes("lighter font")) {
+    console.log("[DIRECTOR] Matched: thinner text");
+    const updatedCaptions = currentManifest.captions.map(c => ({ ...c, fontWeight: 400 }));
+    return {
+      manifest: {
+        ...currentManifest,
+        captions: updatedCaptions,
+        version: (currentManifest.version || 1) + 1,
+        updatedAt: new Date().toISOString(),
+      },
+      actions: [
+        {
+          type: "style_caption",
+          payload: { allCaptions: true, fontWeight: 400 },
+          reasoning: "User wants thinner text",
+        },
+      ],
+      message: "Made all captions thinner!",
+    };
+  }
+
+  // If no API key, return helpful message
   if (!ai) {
-    // Handle common commands in demo mode
-    const lowerMessage = userMessage.toLowerCase();
-
-    if (lowerMessage.includes("luxe") || lowerMessage.includes("luxury")) {
-      const updatedManifest = applyTheme(currentManifest, "luxe");
-      return {
-        manifest: updatedManifest,
-        actions: [
-          {
-            type: "change_theme",
-            payload: { themeId: "luxe" },
-            reasoning: "User requested luxury aesthetic",
-          },
-        ],
-        message:
-          "I've applied the Luxe theme! Gold tones, elegant fades, and Ken Burns zoom effects for a premium feel. (Demo mode)",
-      };
-    }
-
-    if (lowerMessage.includes("cyber") || lowerMessage.includes("neon")) {
-      const updatedManifest = applyTheme(currentManifest, "cyber");
-      return {
-        manifest: updatedManifest,
-        actions: [
-          {
-            type: "change_theme",
-            payload: { themeId: "cyber" },
-            reasoning: "User requested cyberpunk aesthetic",
-          },
-        ],
-        message:
-          "Switched to Cyber theme! Neon colors, glitch effects, and fast cuts for maximum energy. (Demo mode)",
-      };
-    }
-
-    if (lowerMessage.includes("minimal") || lowerMessage.includes("clean")) {
-      const updatedManifest = applyTheme(currentManifest, "minimal");
-      return {
-        manifest: updatedManifest,
-        actions: [
-          {
-            type: "change_theme",
-            payload: { themeId: "minimal" },
-            reasoning: "User requested minimal aesthetic",
-          },
-        ],
-        message:
-          "Applied Minimal theme! Clean slides, typewriter text, and lofi vibes. (Demo mode)",
-      };
-    }
-
-    if (lowerMessage.includes("faster") || lowerMessage.includes("speed up")) {
-      const updatedManifest = adjustTiming(currentManifest, 30);
-      return {
-        manifest: updatedManifest,
-        actions: [
-          {
-            type: "adjust_timing",
-            payload: { clipDuration: 30 },
-            reasoning: "User wants faster pace",
-          },
-        ],
-        message: "Done! Clips are now faster for a more dynamic feel. (Demo mode)",
-      };
-    }
-
-    if (lowerMessage.includes("slower") || lowerMessage.includes("slow down")) {
-      const updatedManifest = adjustTiming(currentManifest, 90);
-      return {
-        manifest: updatedManifest,
-        actions: [
-          {
-            type: "adjust_timing",
-            payload: { clipDuration: 90 },
-            reasoning: "User wants slower pace",
-          },
-        ],
-        message:
-          "Slowed things down for a more cinematic, luxurious feel. (Demo mode)",
-      };
-    }
-
+    console.log("[DIRECTOR] No API key, no keyword match. Command not understood:", userMessage);
     return {
       manifest: currentManifest,
       actions: [],
       message:
-        "I'm your AI Director! Try asking me to change the theme (cyber, luxe, minimal), adjust the pacing, or modify text. (Demo mode - add GOOGLE_GENAI_API_KEY for full capabilities)",
+        `I didn't understand "${userMessage}". Try: "make it luxurious", "add energy", "make text red", "make text bigger", "speed it up". (Demo mode - add GOOGLE_GENAI_API_KEY for full AI capabilities)`,
     };
   }
 
@@ -347,24 +534,35 @@ export async function processDirectorCommand(
   try {
     const prompt = buildDirectorPrompt(currentManifest);
 
-    // Try gemini-2.0-flash first, fall back to gemini-1.5-flash if rate limited
+    // Try models in order of preference (1.5 is retired)
+    const models = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
     let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: `${prompt}\n\nUser command: ${userMessage}`,
-      });
-    } catch (e: unknown) {
-      if (e && typeof e === 'object' && 'status' in e && e.status === 429) {
-        console.log("Rate limited on 2.0-flash, trying 1.5-flash...");
+    let lastError: unknown;
+
+    for (const model of models) {
+      try {
+        console.log(`[DIRECTOR] Trying model: ${model}`);
         response = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
+          model,
           contents: `${prompt}\n\nUser command: ${userMessage}`,
         });
+        console.log(`[DIRECTOR] Success with model: ${model}`);
+        break;
+      } catch (e: unknown) {
+        lastError = e;
+        const status = e && typeof e === 'object' && 'status' in e ? e.status : null;
+        console.log(`[DIRECTOR] Model ${model} failed with status: ${status}`);
+        if (status !== 429 && status !== 503) {
+          throw e;
+        }
       } else {
         console.error("Gemini API error:", e);
         throw e;
       }
+    }
+
+    if (!response) {
+      throw lastError || new Error("All models failed");
     }
 
     // Handle different response formats

@@ -75,8 +75,18 @@ export function DirectorChat({
     setIsLoading(true);
 
     try {
+      console.log("[UI] Sending chat message:", input.trim());
+      console.log("[UI] Current manifest version:", currentManifest?.version);
+
       const result = await sendChatMessage(input.trim(), {
         currentManifest,
+      });
+
+      console.log("[UI] Received result:", {
+        action: result.action,
+        hasManifest: !!result.manifest,
+        manifestVersion: result.manifest?.version,
+        manifestTheme: result.manifest?.theme?.id,
       });
 
       const assistantMessage: ChatMessage = {
@@ -99,9 +109,13 @@ export function DirectorChat({
 
       // If Director made edits, update the manifest
       if (result.action === "edit" && result.manifest) {
+        console.log("[UI] Calling onManifestUpdate with new manifest, version:", result.manifest.version);
         onManifestUpdate(result.manifest);
+      } else {
+        console.log("[UI] NOT updating manifest. action:", result.action, "hasManifest:", !!result.manifest);
       }
-    } catch {
+    } catch (error) {
+      console.error("[UI] Error in sendChatMessage:", error);
       const errorMessage: ChatMessage = {
         id: generateId(),
         role: "assistant",
@@ -162,7 +176,7 @@ export function DirectorChat({
             </div>
             <div>
               <h2 className="font-semibold text-white">AI Director</h2>
-              <p className="text-xs text-zinc-400">Powered by Gemini 2.5 Flash</p>
+              <p className="text-xs text-zinc-400">Powered by Gemini 3 Flash</p>
             </div>
           </div>
 

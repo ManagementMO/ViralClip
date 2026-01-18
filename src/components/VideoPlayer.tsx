@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useState, useRef, useEffect } from "react";
+import { useCallback, useState, useRef, useEffect, useMemo } from "react";
 import { Player, PlayerRef } from "@remotion/player";
 import { motion } from "motion/react";
-import { Play, Pause, RotateCcw, Download } from "lucide-react";
+import { Play, Pause, RotateCcw, Download, Loader2 } from "lucide-react";
 import { MyComposition } from "../../remotion/MyComposition";
 import type { VideoManifest } from "@/lib/types";
 import { cn, formatDuration } from "@/lib/utils";
@@ -17,6 +17,12 @@ export function VideoPlayer({ manifest }: VideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [showDownloadHint, setShowDownloadHint] = useState(false);
+
+  // Generate a stable key for the player based on manifest version and id
+  const playerKey = useMemo(
+    () => `${manifest.id}-${manifest.version || 1}`,
+    [manifest.id, manifest.version]
+  );
 
   useEffect(() => {
     const player = playerRef.current;
@@ -40,7 +46,7 @@ export function VideoPlayer({ manifest }: VideoPlayerProps) {
       player.removeEventListener("ended", onEnded);
       player.removeEventListener("frameupdate", onFrameUpdate);
     };
-  }, []);
+  }, [playerKey]);
 
   const handlePlayPause = useCallback(() => {
     const player = playerRef.current;
@@ -69,20 +75,29 @@ export function VideoPlayer({ manifest }: VideoPlayerProps) {
   const progress = (currentFrame / manifest.durationInFrames) * 100;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Video Container */}
-      <div className="flex-1 flex items-center justify-center p-4 bg-black/20 rounded-xl relative">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
+    <div className="flex flex-col h-full w-full min-h-0">
+      {/* Video Container - takes remaining space after controls */}
+      <div className="flex-1 flex items-center justify-center p-2 bg-black/20 rounded-xl relative min-h-0 w-full">
+        {/*
+          For vertical 9:16 video:
+          - Container uses flex to center
+          - Video fills available height
+          - Width is calculated from aspect ratio
+        */}
+        <div
           className="relative rounded-lg overflow-hidden shadow-2xl"
           style={{
+            height: "100%",
             aspectRatio: `${manifest.width}/${manifest.height}`,
-            maxHeight: "100%",
-            maxWidth: "100%",
           }}
         >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute inset-0"
+          >
           <Player
+            key={playerKey}
             ref={playerRef}
             component={MyComposition}
             inputProps={manifest}
@@ -97,23 +112,30 @@ export function VideoPlayer({ manifest }: VideoPlayerProps) {
             controls={false}
             loop
             autoPlay={false}
+            showPosterWhenBuffering
+            renderPoster={() => (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="w-8 h-8 text-lime-neon animate-spin" />
+                  <span className="text-sm text-zinc-300">Loading media...</span>
+                </div>
+              </div>
+            )}
           />
 
           {/* Play overlay when paused */}
           {!isPlaying && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+            <div
               className="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer"
               onClick={handlePlayPause}
             >
               <div className="w-16 h-16 rounded-full bg-lime-neon flex items-center justify-center">
                 <Play className="w-8 h-8 text-black" fill="currentColor" />
               </div>
-            </motion.div>
+            </div>
           )}
-        </motion.div>
+          </motion.div>
+        </div>
 
         {/* Download hint toast */}
         {showDownloadHint && (

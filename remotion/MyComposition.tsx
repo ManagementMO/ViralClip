@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import {
   AbsoluteFill,
   Sequence,
@@ -87,6 +88,12 @@ const ImageClip: React.FC<{
 }> = ({ clip, theme }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const [hasError, setHasError] = useState(false);
+
+  // Log for debugging
+  if (frame === 0 || frame === 15) {
+    console.log("[ImageClip] Frame:", frame, "URL:", clip.url?.substring(0, 60), "Error:", hasError);
+  }
 
   // Calculate progress through the clip
   const progress = interpolate(frame, [0, clip.duration], [0, 1], {
@@ -116,6 +123,11 @@ const ImageClip: React.FC<{
   // Apply transition
   const transition = clip.transition || theme.transition;
 
+  // Handle missing URL or error - show themed background fallback
+  if (!clip.url || hasError) {
+    return <ThemedBackground theme={theme} />;
+  }
+
   return (
     <TransitionEffect type={transition} progress={progress}>
       <AbsoluteFill
@@ -130,6 +142,13 @@ const ImageClip: React.FC<{
             width: "100%",
             height: "100%",
             objectFit: "cover",
+          }}
+          pauseWhenLoading
+          delayRenderTimeoutInMilliseconds={30000}
+          maxRetries={3}
+          onError={(e) => {
+            console.error("[ImageClip] Failed to load image:", clip.url, e);
+            setHasError(true);
           }}
         />
       </AbsoluteFill>
@@ -238,6 +257,18 @@ export const MyComposition: React.FC<VideoManifest> = ({
   theme,
 }) => {
   const { durationInFrames } = useVideoConfig();
+  const frame = useCurrentFrame();
+
+  // Debug: Log received props on first frame and periodically
+  if (frame === 0 || frame === 30 || frame === 60) {
+    console.log("[COMPOSITION] Frame:", frame, "Received clips:", clips?.length || 0);
+    if (frame === 0) {
+      console.log("[COMPOSITION] Clips data:", JSON.stringify(clips, null, 2));
+      console.log("[COMPOSITION] Product:", product?.title);
+      console.log("[COMPOSITION] Theme:", theme?.id || "none");
+      console.log("[COMPOSITION] Audio URL:", audioUrl ? "present" : "none");
+    }
+  }
 
   // Use theme or default
   const activeTheme = theme || DEFAULT_THEME;
@@ -273,22 +304,32 @@ export const MyComposition: React.FC<VideoManifest> = ({
       {/* Background media clips layer */}
       <AbsoluteFill>
         {safeClips.length > 0 ? (
-          safeClips.map((clip, index) => (
-            <Sequence
-              key={index}
-              from={clip.startFrame}
-              durationInFrames={clip.duration}
-            >
-              <AbsoluteFill style={{ opacity: 0.8 }}>
-                {clip.type === "image" ? (
-                  <ImageClip clip={clip} theme={activeTheme} />
-                ) : clip.url ? (
-                  <VideoClip clip={clip} theme={activeTheme} />
-                ) : null}
-              </AbsoluteFill>
-            </Sequence>
-          ))
-        ) : (
+          safeClips.map((clip, index) => {
+            // Skip clips without valid URLs
+            if (!clip.url || clip.url.includes("placeholder")) {
+              return (
+                <Sequence key={index} from={clip.startFrame} durationInFrames={clip.duration}>
+                  <ThemedBackground theme={activeTheme} />
+                </Sequence>
+              );
+            }
+            return (
+              <Sequence
+                key={index}
+                from={clip.startFrame}
+                durationInFrames={clip.duration}
+              >
+                <AbsoluteFill style={{ opacity: 0.8 }}>
+                  {clip.type === "image" ? (
+                    <ImageClip clip={clip} theme={activeTheme} />
+                  ) : clip.url ? (
+                    <VideoClip clip={clip} theme={activeTheme} />
+                  ) : null}
+                </AbsoluteFill>
+              </Sequence>
+            );
+          })
+        ) : safeProduct.image && !safeProduct.image.includes("placeholder") ? (
           // Fallback: use product image if no clips
           <AbsoluteFill style={{ opacity: 0.8 }}>
             <ImageClip
@@ -302,6 +343,9 @@ export const MyComposition: React.FC<VideoManifest> = ({
               theme={activeTheme}
             />
           </AbsoluteFill>
+        ) : (
+          // No valid images - show themed background with product info
+          <ThemedBackground theme={activeTheme} />
         )}
       </AbsoluteFill>
 
@@ -354,6 +398,11 @@ export const MyComposition: React.FC<VideoManifest> = ({
               style={caption.style}
               durationInFrames={caption.endFrame - caption.startFrame}
               theme={activeTheme}
+              // Per-caption style overrides
+              color={caption.color}
+              fontSize={caption.fontSize}
+              fontWeight={caption.fontWeight}
+              fontFamily={caption.fontFamily}
             />
           </Sequence>
         ))}

@@ -1,4 +1,5 @@
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+console.log("[TTS] ElevenLabs API key configured:", !!ELEVENLABS_API_KEY, ELEVENLABS_API_KEY ? `(${ELEVENLABS_API_KEY.substring(0, 8)}...)` : "");
 
 // Default voice ID (Rachel - clear, professional female voice)
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
@@ -45,8 +46,11 @@ export async function generateSpeech(
   text: string,
   style: keyof typeof VOICE_PRESETS = "hype"
 ): Promise<TTSResult | null> {
+  console.log("[TTS] generateSpeech called, style:", style, "text length:", text.length);
+  console.log("[TTS] API key available:", !!ELEVENLABS_API_KEY);
+
   if (!ELEVENLABS_API_KEY) {
-    console.log("No ElevenLabs API key configured - skipping TTS");
+    console.log("[TTS] No ElevenLabs API key configured - skipping TTS");
     return null;
   }
 
@@ -64,8 +68,10 @@ export async function generateSpeechByPreset(
     console.log("No ElevenLabs API key configured - skipping TTS");
     return null;
   }
+  console.log("[TTS] Using voice preset:", style, "voice ID:", preset.voiceId);
 
   try {
+    console.log("[TTS] Calling ElevenLabs API...");
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${preset.voiceId}`,
       {
@@ -87,14 +93,17 @@ export async function generateSpeechByPreset(
       }
     );
 
+    console.log("[TTS] ElevenLabs response status:", response.status);
+
     if (!response.ok) {
       const error = await response.text();
-      console.error("ElevenLabs API error:", error);
+      console.error("[TTS] ElevenLabs API error:", response.status, error);
       return null;
     }
 
     // Get audio as blob
     const audioBlob = await response.blob();
+    console.log("[TTS] Audio blob size:", audioBlob.size, "bytes");
 
     // Convert to base64 data URL for use in Remotion
     const arrayBuffer = await audioBlob.arrayBuffer();
@@ -105,12 +114,13 @@ export async function generateSpeechByPreset(
     const wordCount = text.split(/\s+/).length;
     const durationMs = wordCount * 150;
 
+    console.log("[TTS] Audio generated successfully, duration estimate:", durationMs, "ms");
     return {
       audioUrl,
       durationMs,
     };
   } catch (error) {
-    console.error("TTS generation failed:", error);
+    console.error("[TTS] TTS generation failed:", error);
     return null;
   }
 }
