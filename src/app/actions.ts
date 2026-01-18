@@ -90,7 +90,7 @@ Return ONLY a JSON object in this exact format (no markdown, no code blocks):
 
   try {
     // Try models in order of preference (1.5 is retired)
-    const models = ["gemini-2.0-flash"];
+    const models = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
     let response;
     let lastError: unknown;
 

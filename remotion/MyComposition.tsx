@@ -398,6 +398,11 @@ export const MyComposition: React.FC<VideoManifest> = ({
               style={caption.style}
               durationInFrames={caption.endFrame - caption.startFrame}
               theme={activeTheme}
+              // Per-caption style overrides
+              color={caption.color}
+              fontSize={caption.fontSize}
+              fontWeight={caption.fontWeight}
+              fontFamily={caption.fontFamily}
             />
           </Sequence>
         ))}

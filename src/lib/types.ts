@@ -43,6 +43,11 @@ export const CaptionSchema = z.object({
   text: z.string(),
   style: CaptionStyleSchema,
   position: z.enum(["top", "center", "bottom"]).default("center"),
+  // Per-caption style overrides (optional - falls back to theme)
+  color: z.string().optional(),           // e.g., "#ff0000", "red"
+  fontSize: z.string().optional(),        // e.g., "72px", "clamp(48px, 8vw, 96px)"
+  fontWeight: z.number().optional(),      // e.g., 400, 700, 900
+  fontFamily: z.string().optional(),      // e.g., "Arial", "Oswald"
 });
 export type Caption = z.infer<typeof CaptionSchema>;
 
@@ -150,6 +155,7 @@ export const DirectorActionSchema = z.object({
     "update_text",
     "adjust_timing",
     "regenerate_script",
+    "style_caption",  // Per-caption styling (color, fontSize, fontWeight, fontFamily)
   ]),
   payload: z.record(z.unknown()),
   reasoning: z.string().optional(),

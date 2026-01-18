@@ -176,7 +176,7 @@ export function DirectorChat({
             </div>
             <div>
               <h2 className="font-semibold text-white">AI Director</h2>
-              <p className="text-xs text-zinc-400">Powered by Gemini 2.0 Flash</p>
+              <p className="text-xs text-zinc-400">Powered by Gemini 3 Flash</p>
             </div>
           </div>
 

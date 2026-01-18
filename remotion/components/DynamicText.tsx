@@ -14,6 +14,11 @@ interface DynamicTextProps {
   style: CaptionStyle;
   durationInFrames: number;
   theme?: Theme;
+  // Per-caption style overrides
+  color?: string;
+  fontSize?: string;
+  fontWeight?: number;
+  fontFamily?: string;
 }
 
 // Base CSS properties shared across styles
@@ -45,6 +50,11 @@ export const DynamicText: React.FC<DynamicTextProps> = ({
   style,
   durationInFrames,
   theme = THEME_PRESETS.cyber,
+  // Per-caption overrides
+  color: colorOverride,
+  fontSize: fontSizeOverride,
+  fontWeight: fontWeightOverride,
+  fontFamily: fontFamilyOverride,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -228,12 +238,13 @@ export const DynamicText: React.FC<DynamicTextProps> = ({
     textShadow,
   } = styleProps;
 
+  // Apply per-caption overrides if provided
   const cssProps: React.CSSProperties = {
     transform,
-    color,
-    fontSize,
-    fontWeight,
-    fontFamily: styleFontFamily,
+    color: colorOverride || color,
+    fontSize: fontSizeOverride || fontSize,
+    fontWeight: fontWeightOverride || fontWeight,
+    fontFamily: fontFamilyOverride ? `${fontFamilyOverride}, sans-serif` : styleFontFamily,
     textTransform,
     letterSpacing,
     textShadow,

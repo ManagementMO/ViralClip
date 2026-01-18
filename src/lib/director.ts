@@ -14,7 +14,7 @@ import {
   createMockVideoIndex,
 } from "./twelvelabs";
 
-// Initialize Google GenAI client with Gemini 2.0 Flash
+// Initialize Google GenAI client with Gemini 3 Flash
 const getGenAI = () => {
   const apiKey = process.env.GOOGLE_GENAI_API_KEY;
   if (!apiKey) return null;
@@ -61,64 +61,81 @@ function extractJSON<T>(text: string): T | null {
 function buildDirectorPrompt(manifest: VideoManifest): string {
   return `You are the AI Director for ViralClip, a video editing AI. You modify video projects through natural language.
 
-CURRENT VIDEO MANIFEST:
-${JSON.stringify(manifest, null, 2)}
+VIDEO STRUCTURE (IMPORTANT - understand what each element controls):
+1. **CAPTIONS** - The MAIN animated text that appears throughout the video. This is the PRIMARY content users see.
+   - These are the big, animated words that appear on screen (e.g., "CHECK THIS OUT", "INSANE SOUND", "ONLY $149.99")
+   - Each caption has: startFrame, endFrame, text, style, position
+   - **Per-caption style overrides** (optional): color, fontSize, fontWeight, fontFamily
+     - These override the theme for specific captions only
+
+2. **THEME** - Controls the DEFAULT visual style of captions (can be overridden per-caption)
+   - When users say "make it luxurious", "add energy", "make it minimal" - change THEME
+
+3. **CLIPS** - Background images/videos (only modify if user mentions "background")
+
+4. **PRODUCT** - End card (DO NOT modify unless explicitly asked)
+
+CURRENT CAPTIONS:
+${JSON.stringify(manifest.captions, null, 2)}
+
+CURRENT THEME: ${manifest.theme?.id || "cyber"} (colors: ${manifest.theme?.primaryColor || "#00ff88"}, font: ${manifest.theme?.fontFamily || "Oswald"})
 
 AVAILABLE THEMES:
-- cyber: Neon green/pink, fast cuts, glitch effects, techno music, Oswald font
-- luxe: Gold/black, slow elegant fades, Ken Burns zoom, classical music, Playfair Display font
-- minimal: White/gray, clean slides, typewriter text, lofi music, Inter font
+- cyber: Neon green (#00ff88), pink (#ff0066), Oswald font - HIGH ENERGY
+- luxe: Gold (#d4af37), black, Playfair Display font - PREMIUM
+- minimal: White (#ffffff), gray, Inter font - CLEAN
 
 AVAILABLE ACTIONS:
-1. change_theme: Switch to a different theme preset
-2. update_clip: Modify a specific clip (timing, source)
-3. search_video: Find a specific moment in the video (requires TwelveLabs)
-4. change_music: Change background music genre
-5. update_text: Modify captions or script text
-6. adjust_timing: Change clip/caption durations
-7. regenerate_script: Create new script content
+1. change_theme: Switch entire theme
+2. update_text: Change caption text
+3. style_caption: Customize individual caption appearance (color, fontSize, fontWeight, fontFamily)
+4. adjust_timing: Change pacing
+
+CAPTION STYLE OPTIONS (for style_caption action):
+- color: Any CSS color (e.g., "#ff0000", "red", "#00ff88")
+- fontSize: CSS font size (e.g., "72px", "96px", "clamp(48px, 10vw, 120px)")
+- fontWeight: Number 100-900 (400=normal, 700=bold, 900=black)
+- fontFamily: Font name (e.g., "Arial", "Oswald", "Impact", "Playfair Display")
 
 RESPONSE FORMAT:
-Return ONLY a JSON object with this structure:
+Return ONLY a JSON object:
 {
-  "actions": [
-    {
-      "type": "action_type",
-      "payload": { /* action-specific data */ },
-      "reasoning": "Why you're making this change"
-    }
-  ],
-  "message": "Friendly response to the user explaining what you did",
-  "manifestChanges": {
-    // Only include fields that need to change
-    // e.g., "theme": { full theme object }
-  }
+  "actions": [{"type": "action_type", "payload": {...}, "reasoning": "..."}],
+  "message": "Friendly response explaining what you changed",
+  "manifestChanges": { /* only fields that change */ }
 }
 
 EXAMPLES:
 
 User: "Make it feel more luxurious"
 {
-  "actions": [{"type": "change_theme", "payload": {"themeId": "luxe"}, "reasoning": "User wants luxury aesthetic"}],
-  "message": "I've switched to the Luxe theme - elegant gold tones, smooth fades, and classical background music. The Ken Burns effect will add a cinematic touch.",
+  "actions": [{"type": "change_theme", "payload": {"themeId": "luxe"}, "reasoning": "Applying luxury theme"}],
+  "message": "I've applied the Luxe theme! Elegant gold tones and smooth fades.",
   "manifestChanges": {"theme": ${JSON.stringify(THEME_PRESETS.luxe)}}
 }
 
-User: "Speed up the cuts"
+User: "Make the text red"
 {
-  "actions": [{"type": "adjust_timing", "payload": {"clipDuration": 30}, "reasoning": "Faster cuts requested"}],
-  "message": "Done! I've shortened each clip to create a faster, more dynamic pace.",
-  "manifestChanges": {"theme": {"clipDuration": 30}}
+  "actions": [{"type": "style_caption", "payload": {"allCaptions": true, "color": "#ff0000"}, "reasoning": "User wants red text"}],
+  "message": "Done! All captions are now red.",
+  "manifestChanges": {"captions": ${JSON.stringify(manifest.captions.map(c => ({ ...c, color: "#ff0000" })))}}
 }
 
-User: "Change the first line to SAY GOODBYE TO BORING"
+User: "Make the first caption bigger and blue"
 {
-  "actions": [{"type": "update_text", "payload": {"captionIndex": 0, "newText": "SAY GOODBYE TO BORING"}, "reasoning": "User requested text change"}],
-  "message": "Updated! The opening line now reads 'SAY GOODBYE TO BORING'.",
-  "manifestChanges": {"captions": [{"startFrame": 0, "endFrame": 60, "text": "SAY GOODBYE TO BORING", "style": "impact", "position": "center"}]}
+  "actions": [{"type": "style_caption", "payload": {"captionIndex": 0, "color": "#0088ff", "fontSize": "96px"}, "reasoning": "Custom style for first caption"}],
+  "message": "The first caption is now larger and blue!",
+  "manifestChanges": {"captions": [{"startFrame": 0, "endFrame": 60, "text": "${manifest.captions[0]?.text || "TEXT"}", "style": "${manifest.captions[0]?.style || "impact"}", "position": "center", "color": "#0088ff", "fontSize": "96px"}]}
 }
 
-Be creative but precise. Only modify what the user asks for. Always explain your changes.`;
+User: "Use Impact font for all text"
+{
+  "actions": [{"type": "style_caption", "payload": {"allCaptions": true, "fontFamily": "Impact"}, "reasoning": "User wants Impact font"}],
+  "message": "All captions now use the Impact font!",
+  "manifestChanges": {"captions": ${JSON.stringify(manifest.captions.map(c => ({ ...c, fontFamily: "Impact" })))}}
+}
+
+IMPORTANT: For style changes like color/font/size, use style_caption action and update the captions array in manifestChanges.`;
 }
 
 // Apply theme changes to manifest
@@ -377,6 +394,131 @@ export async function processDirectorCommand(
     };
   }
 
+  // Color keywords - apply to all captions
+  const colorKeywords: Record<string, string> = {
+    "red": "#ff0000",
+    "blue": "#0088ff",
+    "green": "#00ff88",
+    "yellow": "#ffff00",
+    "orange": "#ff8800",
+    "pink": "#ff00aa",
+    "purple": "#aa00ff",
+    "white": "#ffffff",
+    "black": "#000000",
+    "cyan": "#00ffff",
+    "magenta": "#ff00ff",
+  };
+
+  for (const [colorName, colorHex] of Object.entries(colorKeywords)) {
+    if (lowerMessage.includes(colorName) &&
+        (lowerMessage.includes("text") || lowerMessage.includes("caption") || lowerMessage.includes("color"))) {
+      console.log("[DIRECTOR] Matched: color change to", colorName);
+      const updatedCaptions = currentManifest.captions.map(c => ({ ...c, color: colorHex }));
+      return {
+        manifest: {
+          ...currentManifest,
+          captions: updatedCaptions,
+          version: (currentManifest.version || 1) + 1,
+          updatedAt: new Date().toISOString(),
+        },
+        actions: [
+          {
+            type: "style_caption",
+            payload: { allCaptions: true, color: colorHex },
+            reasoning: `User wants ${colorName} text`,
+          },
+        ],
+        message: `Done! All captions are now ${colorName}.`,
+      };
+    }
+  }
+
+  // Font size keywords
+  if (lowerMessage.includes("bigger") || lowerMessage.includes("larger")) {
+    console.log("[DIRECTOR] Matched: bigger text");
+    const updatedCaptions = currentManifest.captions.map(c => ({ ...c, fontSize: "clamp(64px, 12vw, 120px)" }));
+    return {
+      manifest: {
+        ...currentManifest,
+        captions: updatedCaptions,
+        version: (currentManifest.version || 1) + 1,
+        updatedAt: new Date().toISOString(),
+      },
+      actions: [
+        {
+          type: "style_caption",
+          payload: { allCaptions: true, fontSize: "clamp(64px, 12vw, 120px)" },
+          reasoning: "User wants bigger text",
+        },
+      ],
+      message: "Made all captions bigger!",
+    };
+  }
+
+  if (lowerMessage.includes("smaller")) {
+    console.log("[DIRECTOR] Matched: smaller text");
+    const updatedCaptions = currentManifest.captions.map(c => ({ ...c, fontSize: "clamp(32px, 5vw, 48px)" }));
+    return {
+      manifest: {
+        ...currentManifest,
+        captions: updatedCaptions,
+        version: (currentManifest.version || 1) + 1,
+        updatedAt: new Date().toISOString(),
+      },
+      actions: [
+        {
+          type: "style_caption",
+          payload: { allCaptions: true, fontSize: "clamp(32px, 5vw, 48px)" },
+          reasoning: "User wants smaller text",
+        },
+      ],
+      message: "Made all captions smaller!",
+    };
+  }
+
+  // Font weight keywords
+  if (lowerMessage.includes("bolder") || lowerMessage.includes("thicker")) {
+    console.log("[DIRECTOR] Matched: bolder text");
+    const updatedCaptions = currentManifest.captions.map(c => ({ ...c, fontWeight: 900 }));
+    return {
+      manifest: {
+        ...currentManifest,
+        captions: updatedCaptions,
+        version: (currentManifest.version || 1) + 1,
+        updatedAt: new Date().toISOString(),
+      },
+      actions: [
+        {
+          type: "style_caption",
+          payload: { allCaptions: true, fontWeight: 900 },
+          reasoning: "User wants bolder text",
+        },
+      ],
+      message: "Made all captions bolder!",
+    };
+  }
+
+  if (lowerMessage.includes("thinner") || lowerMessage.includes("lighter font")) {
+    console.log("[DIRECTOR] Matched: thinner text");
+    const updatedCaptions = currentManifest.captions.map(c => ({ ...c, fontWeight: 400 }));
+    return {
+      manifest: {
+        ...currentManifest,
+        captions: updatedCaptions,
+        version: (currentManifest.version || 1) + 1,
+        updatedAt: new Date().toISOString(),
+      },
+      actions: [
+        {
+          type: "style_caption",
+          payload: { allCaptions: true, fontWeight: 400 },
+          reasoning: "User wants thinner text",
+        },
+      ],
+      message: "Made all captions thinner!",
+    };
+  }
+
   // If no API key, return helpful message
   if (!ai) {
     console.log("[DIRECTOR] No API key, no keyword match. Command not understood:", userMessage);
@@ -384,7 +526,7 @@ export async function processDirectorCommand(
       manifest: currentManifest,
       actions: [],
       message:
-        `I didn't understand "${userMessage}". Try: "make it luxurious", "add more energy", "speed it up", or "make it minimal". (Demo mode - add GOOGLE_GENAI_API_KEY for full AI capabilities)`,
+        `I didn't understand "${userMessage}". Try: "make it luxurious", "add energy", "make text red", "make text bigger", "speed it up". (Demo mode - add GOOGLE_GENAI_API_KEY for full AI capabilities)`,
     };
   }
 
@@ -393,7 +535,7 @@ export async function processDirectorCommand(
     const prompt = buildDirectorPrompt(currentManifest);
 
     // Try models in order of preference (1.5 is retired)
-    const models = ["gemini-2.0-flash"];
+    const models = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
     let response;
     let lastError: unknown;
 
