@@ -25,8 +25,8 @@ Only $149.99 - Link in bio!`,
   voiceVolume: 1.0,
   fps: 30,
   durationInFrames: 300, // 10 seconds at 30fps
-  width: 1080,
-  height: 1920,
+  width: 1920,
+  height: 1080,
   captions: [
     {
       startFrame: 0,

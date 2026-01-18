@@ -14,7 +14,7 @@ import {
   createMockVideoIndex,
 } from "./twelvelabs";
 
-// Initialize Google GenAI client with Gemini 2.5 Flash
+// Initialize Google GenAI client with Gemini 2.0 Flash
 const getGenAI = () => {
   const apiKey = process.env.GOOGLE_GENAI_API_KEY;
   if (!apiKey) return null;
@@ -126,6 +126,10 @@ function applyTheme(manifest: VideoManifest, themeId: ThemeId): VideoManifest {
   const theme = THEME_PRESETS[themeId];
   if (!theme) return manifest;
 
+  console.log("[DIRECTOR] Applying theme:", themeId);
+  console.log("[DIRECTOR] Theme colors:", theme.primaryColor, theme.secondaryColor);
+  console.log("[DIRECTOR] Theme textAnimation:", theme.textAnimation);
+
   // Update clips with theme-appropriate transition
   const updatedClips = manifest.clips.map((clip) => ({
     ...clip,
@@ -143,6 +147,7 @@ function applyTheme(manifest: VideoManifest, themeId: ThemeId): VideoManifest {
     theme,
     clips: updatedClips,
     captions: updatedCaptions,
+    version: (manifest.version || 1) + 1,  // INCREMENT VERSION for re-render
     updatedAt: new Date().toISOString(),
   };
 }
@@ -154,6 +159,8 @@ function adjustTiming(
 ): VideoManifest {
   const numClips = manifest.clips.length;
   if (numClips === 0) return manifest;
+
+  console.log("[DIRECTOR] Adjusting timing, clip duration:", clipDuration);
 
   const totalFrames = manifest.durationInFrames;
   const actualClipDuration = Math.min(clipDuration, Math.floor(totalFrames / numClips));
@@ -167,6 +174,7 @@ function adjustTiming(
   return {
     ...manifest,
     clips: updatedClips,
+    version: (manifest.version || 1) + 1,  // INCREMENT VERSION for re-render
     updatedAt: new Date().toISOString(),
   };
 }
@@ -181,6 +189,8 @@ function updateCaption(
     return manifest;
   }
 
+  console.log("[DIRECTOR] Updating caption", captionIndex, "to:", newText);
+
   const updatedCaptions = [...manifest.captions];
   updatedCaptions[captionIndex] = {
     ...updatedCaptions[captionIndex],
@@ -194,6 +204,7 @@ function updateCaption(
     ...manifest,
     captions: updatedCaptions,
     script,
+    version: (manifest.version || 1) + 1,  // INCREMENT VERSION for re-render
     updatedAt: new Date().toISOString(),
   };
 }
@@ -250,96 +261,130 @@ export async function processDirectorCommand(
   currentManifest: VideoManifest
 ): Promise<DirectorResponse> {
   const ai = getGenAI();
+  const lowerMessage = userMessage.toLowerCase();
 
-  // Default response for demo mode
+  console.log("[DIRECTOR] Processing command:", userMessage);
+  console.log("[DIRECTOR] Has Gemini API:", !!ai);
+
+  // Demo mode OR Gemini mode - check common commands first for speed
+  // This also serves as fallback if Gemini fails
+
+  // Luxury/Premium theme keywords
+  if (lowerMessage.includes("luxe") ||
+      lowerMessage.includes("luxur") ||  // matches luxury, luxurious
+      lowerMessage.includes("premium") ||
+      lowerMessage.includes("elegant") ||
+      lowerMessage.includes("gold")) {
+    console.log("[DIRECTOR] Matched: luxury theme");
+    const updatedManifest = applyTheme(currentManifest, "luxe");
+    return {
+      manifest: updatedManifest,
+      actions: [
+        {
+          type: "change_theme",
+          payload: { themeId: "luxe" },
+          reasoning: "User requested luxury aesthetic",
+        },
+      ],
+      message:
+        "I've applied the Luxe theme! Gold tones, elegant fades, and Ken Burns zoom effects for a premium feel.",
+    };
+  }
+
+  // Cyber/Energetic theme keywords
+  if (lowerMessage.includes("cyber") ||
+      lowerMessage.includes("neon") ||
+      lowerMessage.includes("energy") ||  // matches energy, energetic
+      lowerMessage.includes("hype") ||
+      lowerMessage.includes("intense") ||
+      lowerMessage.includes("vibrant")) {
+    console.log("[DIRECTOR] Matched: cyber theme");
+    const updatedManifest = applyTheme(currentManifest, "cyber");
+    return {
+      manifest: updatedManifest,
+      actions: [
+        {
+          type: "change_theme",
+          payload: { themeId: "cyber" },
+          reasoning: "User requested energetic/cyberpunk aesthetic",
+        },
+      ],
+      message:
+        "Switched to Cyber theme! Neon colors, glitch effects, and fast cuts for maximum energy.",
+    };
+  }
+
+  // Minimal/Clean theme keywords
+  if (lowerMessage.includes("minimal") ||
+      lowerMessage.includes("clean") ||
+      lowerMessage.includes("simple") ||
+      lowerMessage.includes("subtle") ||
+      lowerMessage.includes("calm")) {
+    console.log("[DIRECTOR] Matched: minimal theme");
+    const updatedManifest = applyTheme(currentManifest, "minimal");
+    return {
+      manifest: updatedManifest,
+      actions: [
+        {
+          type: "change_theme",
+          payload: { themeId: "minimal" },
+          reasoning: "User requested minimal aesthetic",
+        },
+      ],
+      message:
+        "Applied Minimal theme! Clean slides, typewriter text, and lofi vibes.",
+    };
+  }
+
+  // Faster pacing keywords
+  if (lowerMessage.includes("faster") ||
+      lowerMessage.includes("speed up") ||
+      lowerMessage.includes("quicker") ||
+      lowerMessage.includes("rapid")) {
+    console.log("[DIRECTOR] Matched: faster timing");
+    const updatedManifest = adjustTiming(currentManifest, 30);
+    return {
+      manifest: updatedManifest,
+      actions: [
+        {
+          type: "adjust_timing",
+          payload: { clipDuration: 30 },
+          reasoning: "User wants faster pace",
+        },
+      ],
+      message: "Done! Clips are now faster for a more dynamic feel.",
+    };
+  }
+
+  // Slower pacing keywords
+  if (lowerMessage.includes("slower") ||
+      lowerMessage.includes("slow down") ||
+      lowerMessage.includes("calm") ||
+      lowerMessage.includes("relaxed")) {
+    console.log("[DIRECTOR] Matched: slower timing");
+    const updatedManifest = adjustTiming(currentManifest, 90);
+    return {
+      manifest: updatedManifest,
+      actions: [
+        {
+          type: "adjust_timing",
+          payload: { clipDuration: 90 },
+          reasoning: "User wants slower pace",
+        },
+      ],
+      message:
+        "Slowed things down for a more cinematic, luxurious feel.",
+    };
+  }
+
+  // If no API key, return helpful message
   if (!ai) {
-    // Handle common commands in demo mode
-    const lowerMessage = userMessage.toLowerCase();
-
-    if (lowerMessage.includes("luxe") || lowerMessage.includes("luxury")) {
-      const updatedManifest = applyTheme(currentManifest, "luxe");
-      return {
-        manifest: updatedManifest,
-        actions: [
-          {
-            type: "change_theme",
-            payload: { themeId: "luxe" },
-            reasoning: "User requested luxury aesthetic",
-          },
-        ],
-        message:
-          "I've applied the Luxe theme! Gold tones, elegant fades, and Ken Burns zoom effects for a premium feel. (Demo mode)",
-      };
-    }
-
-    if (lowerMessage.includes("cyber") || lowerMessage.includes("neon")) {
-      const updatedManifest = applyTheme(currentManifest, "cyber");
-      return {
-        manifest: updatedManifest,
-        actions: [
-          {
-            type: "change_theme",
-            payload: { themeId: "cyber" },
-            reasoning: "User requested cyberpunk aesthetic",
-          },
-        ],
-        message:
-          "Switched to Cyber theme! Neon colors, glitch effects, and fast cuts for maximum energy. (Demo mode)",
-      };
-    }
-
-    if (lowerMessage.includes("minimal") || lowerMessage.includes("clean")) {
-      const updatedManifest = applyTheme(currentManifest, "minimal");
-      return {
-        manifest: updatedManifest,
-        actions: [
-          {
-            type: "change_theme",
-            payload: { themeId: "minimal" },
-            reasoning: "User requested minimal aesthetic",
-          },
-        ],
-        message:
-          "Applied Minimal theme! Clean slides, typewriter text, and lofi vibes. (Demo mode)",
-      };
-    }
-
-    if (lowerMessage.includes("faster") || lowerMessage.includes("speed up")) {
-      const updatedManifest = adjustTiming(currentManifest, 30);
-      return {
-        manifest: updatedManifest,
-        actions: [
-          {
-            type: "adjust_timing",
-            payload: { clipDuration: 30 },
-            reasoning: "User wants faster pace",
-          },
-        ],
-        message: "Done! Clips are now faster for a more dynamic feel. (Demo mode)",
-      };
-    }
-
-    if (lowerMessage.includes("slower") || lowerMessage.includes("slow down")) {
-      const updatedManifest = adjustTiming(currentManifest, 90);
-      return {
-        manifest: updatedManifest,
-        actions: [
-          {
-            type: "adjust_timing",
-            payload: { clipDuration: 90 },
-            reasoning: "User wants slower pace",
-          },
-        ],
-        message:
-          "Slowed things down for a more cinematic, luxurious feel. (Demo mode)",
-      };
-    }
-
+    console.log("[DIRECTOR] No API key, no keyword match. Command not understood:", userMessage);
     return {
       manifest: currentManifest,
       actions: [],
       message:
-        "I'm your AI Director! Try asking me to change the theme (cyber, luxe, minimal), adjust the pacing, or modify text. (Demo mode - add GOOGLE_GENAI_API_KEY for full capabilities)",
+        `I didn't understand "${userMessage}". Try: "make it luxurious", "add more energy", "speed it up", or "make it minimal". (Demo mode - add GOOGLE_GENAI_API_KEY for full AI capabilities)`,
     };
   }
 
@@ -347,23 +392,32 @@ export async function processDirectorCommand(
   try {
     const prompt = buildDirectorPrompt(currentManifest);
 
-    // Try gemini-2.0-flash first, fall back to gemini-1.5-flash if rate limited
+    // Try models in order of preference (1.5 is retired)
+    const models = ["gemini-2.0-flash"];
     let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: `${prompt}\n\nUser command: ${userMessage}`,
-      });
-    } catch (e: unknown) {
-      if (e && typeof e === 'object' && 'status' in e && e.status === 429) {
-        console.log("Rate limited on 2.0-flash, trying 1.5-flash...");
+    let lastError: unknown;
+
+    for (const model of models) {
+      try {
+        console.log(`[DIRECTOR] Trying model: ${model}`);
         response = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
+          model,
           contents: `${prompt}\n\nUser command: ${userMessage}`,
         });
-      } else {
-        throw e;
+        console.log(`[DIRECTOR] Success with model: ${model}`);
+        break;
+      } catch (e: unknown) {
+        lastError = e;
+        const status = e && typeof e === 'object' && 'status' in e ? e.status : null;
+        console.log(`[DIRECTOR] Model ${model} failed with status: ${status}`);
+        if (status !== 429 && status !== 503) {
+          throw e;
+        }
       }
+    }
+
+    if (!response) {
+      throw lastError || new Error("All models failed");
     }
 
     const text = response.text?.trim() || "";

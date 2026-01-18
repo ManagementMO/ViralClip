@@ -89,58 +89,82 @@ Return ONLY a JSON object in this exact format (no markdown, no code blocks):
 }`;
 
   try {
-    // Try gemini-2.0-flash first, fall back to gemini-1.5-flash if rate limited
+    // Try models in order of preference (1.5 is retired)
+    const models = ["gemini-2.0-flash"];
     let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: prompt,
-      });
-    } catch (e: unknown) {
-      if (e && typeof e === 'object' && 'status' in e && e.status === 429) {
-        console.log("Rate limited on 2.0-flash, trying 1.5-flash...");
+    let lastError: unknown;
+
+    for (const model of models) {
+      try {
+        console.log(`[DEBUG] Trying model: ${model}`);
         response = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
+          model,
           contents: prompt,
         });
-      } else {
-        throw e;
+        console.log(`[DEBUG] Success with model: ${model}`);
+        break;
+      } catch (e: unknown) {
+        lastError = e;
+        const status = e && typeof e === 'object' && 'status' in e ? e.status : null;
+        console.log(`[DEBUG] Model ${model} failed with status: ${status}`);
+        if (status !== 429 && status !== 503) {
+          throw e; // Non-retryable error
+        }
       }
+    }
+
+    if (!response) {
+      throw lastError || new Error("All models failed");
     }
 
     const text = response.text?.trim() || "";
+    console.log("[DEBUG] Gemini raw response:", text.substring(0, 500));
 
-    // Extract JSON using non-greedy match to find first complete object
-    const jsonMatch = text.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/);
-    if (jsonMatch) {
+    // Try to parse JSON from response - handle various formats
+    let parsed: { script?: string; captions?: unknown } | null = null;
+
+    // First try: look for JSON in code blocks
+    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
       try {
-        const parsed = JSON.parse(jsonMatch[0]) as {
-          script?: string;
-          captions?: unknown;
-        };
-
-        // Validate the parsed data
-        if (
-          typeof parsed.script === "string" &&
-          validateCaptions(parsed.captions)
-        ) {
-          return {
-            script: parsed.script,
-            captions: normalizeCaptions(parsed.captions),
-          };
-        }
-      } catch {
-        // JSON parsing failed, fall through to mock data
+        parsed = JSON.parse(codeBlockMatch[1].trim());
+        console.log("[DEBUG] Parsed from code block");
+      } catch (e) {
+        console.log("[DEBUG] Code block parse failed:", e);
       }
     }
 
+    // Second try: extract JSON object directly
+    if (!parsed) {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+          console.log("[DEBUG] Parsed from raw JSON");
+        } catch (e) {
+          console.log("[DEBUG] Raw JSON parse failed:", e);
+        }
+      }
+    }
+
+    // Validate the parsed data
+    if (parsed && typeof parsed.script === "string" && validateCaptions(parsed.captions)) {
+      console.log("[DEBUG] Gemini script generated successfully");
+      return {
+        script: parsed.script,
+        captions: normalizeCaptions(parsed.captions as Caption[]),
+      };
+    }
+
     // Fallback to mock data if parsing fails
+    console.log("[DEBUG] Falling back to mock data - parsed:", !!parsed, "script:", typeof parsed?.script, "captions valid:", validateCaptions(parsed?.captions));
     return {
       script: MOCK_MANIFEST.script,
       captions: MOCK_MANIFEST.captions,
     };
-  } catch {
+  } catch (e) {
     // API error - fallback to mock data
+    console.log("[DEBUG] Gemini API error, using mock data:", e);
     return {
       script: MOCK_MANIFEST.script,
       captions: MOCK_MANIFEST.captions,
@@ -177,17 +201,26 @@ export async function generateVideo(
 ): Promise<GenerateVideoResponse> {
   try {
     // Step 1: Scrape product details
+    console.log("[DEBUG] Scraping product URL:", productUrl);
     const product = await scrapeProduct(productUrl);
+    console.log("[DEBUG] Scraped product:", JSON.stringify(product, null, 2));
 
     // Step 2: Generate script and captions with Gemini
+    console.log("[DEBUG] Generating script...");
     const { script, captions } = await generateScriptWithGemini(product, style);
+    console.log("[DEBUG] Script:", script);
+    console.log("[DEBUG] Captions:", JSON.stringify(captions, null, 2));
 
     // Step 3: Generate clips from product images
     const durationInFrames = 300; // 10 seconds
+    console.log("[DEBUG] Product images:", product.images);
     const clips = generateClipsFromImages(product.images, durationInFrames);
+    console.log("[DEBUG] Generated clips:", JSON.stringify(clips, null, 2));
 
     // Step 4: Generate voiceover audio (optional - requires API key)
+    console.log("[DEBUG] Generating TTS for script:", script.substring(0, 50) + "...");
     const ttsResult = await generateVideoVoiceover(script, style as "hype" | "minimal" | "luxury" | "playful");
+    console.log("[DEBUG] TTS result:", ttsResult ? "Audio generated" : "No audio (check API key)");
 
     // Step 5: Determine theme based on style and product
     const themeId: ThemeId = style === "luxury" ? "luxe" : style === "hype" ? "cyber" : suggestTheme(product.title);
@@ -221,8 +254,8 @@ export async function generateVideo(
       audioUrl: ttsResult?.audioUrl,
       fps: 30,
       durationInFrames,
-      width: 1080,
-      height: 1920,
+      width: 1920,
+      height: 1080,
       captions: themedCaptions,
       clips: themedClips,
       product: {
@@ -239,11 +272,16 @@ export async function generateVideo(
       createdAt: new Date().toISOString(),
     };
 
+    console.log("[DEBUG] Final manifest clips:", manifest.clips.length);
+    console.log("[DEBUG] Final manifest theme:", manifest.theme?.id);
+    console.log("[DEBUG] Final manifest audioUrl:", manifest.audioUrl ? "present" : "none");
+
     return {
       success: true,
       manifest,
     };
   } catch (error) {
+    console.error("[DEBUG] generateVideo error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to generate video",
@@ -269,11 +307,22 @@ export async function sendChatMessage(
 
   // If we have a manifest, use the Director to process editing commands
   if (context?.currentManifest) {
+    console.log("[CHAT] Processing Director command:", message);
+    console.log("[CHAT] Current manifest version:", context.currentManifest.version);
+
     const result = await processDirectorCommand(message, context.currentManifest);
+
+    console.log("[CHAT] Director result - actions:", result.actions.length);
+    console.log("[CHAT] Director result - manifest version:", result.manifest.version);
+    console.log("[CHAT] Director result - theme:", result.manifest.theme?.id);
+
+    const action = result.actions.length > 0 ? "edit" : undefined;
+    console.log("[CHAT] Returning action:", action);
+
     return {
       response: result.message,
       manifest: result.manifest,
-      action: result.actions.length > 0 ? "edit" : undefined,
+      action,
     };
   }
 

@@ -13,24 +13,47 @@ const FALLBACK_PRODUCT: ScrapedProduct = {
   images: [],
 };
 
-// Fetch HTML content from URL
+// Fetch HTML content from URL with better browser simulation
 async function fetchHTML(url: string): Promise<string> {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.5",
-    },
-    redirect: "follow",
-  });
+  // Try multiple user agents if needed
+  const userAgents = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+  ];
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch URL: ${response.status}`);
+  let lastError: Error | null = null;
+
+  for (const userAgent of userAgents) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": userAgent,
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Sec-Fetch-User": "?1",
+          "Upgrade-Insecure-Requests": "1",
+        },
+        redirect: "follow",
+      });
+
+      if (response.ok) {
+        return response.text();
+      }
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+    }
   }
 
-  return response.text();
+  throw lastError || new Error("Failed to fetch URL");
 }
 
 // Extract Shopify product data from JSON-LD or product JSON
@@ -250,6 +273,7 @@ function extractFromContent($: CheerioDoc): Partial<ScrapedProduct> {
 
 // Main scraping function
 export async function scrapeProduct(url: string): Promise<ScrapedProduct> {
+  console.log("[SCRAPER] Starting scrape for:", url);
   try {
     // Validate URL
     const parsedUrl = new URL(url);
@@ -257,22 +281,34 @@ export async function scrapeProduct(url: string): Promise<ScrapedProduct> {
       parsedUrl.hostname.includes("shopify") ||
       parsedUrl.hostname.includes("myshopify");
 
+    console.log("[SCRAPER] Is Shopify:", isShopify, "Has /products/:", url.includes("/products/"));
+
     // Try Shopify-specific scraping first
     if (isShopify || url.includes("/products/")) {
+      console.log("[SCRAPER] Trying Shopify scraper...");
       const shopifyProduct = await scrapeShopify(url);
       if (shopifyProduct) {
+        console.log("[SCRAPER] Shopify scrape success:", shopifyProduct.title);
+        console.log("[SCRAPER] Images found:", shopifyProduct.images?.length || 0);
         return shopifyProduct;
       }
+      console.log("[SCRAPER] Shopify scrape returned null, falling back to HTML");
     }
 
     // Fetch and parse HTML
+    console.log("[SCRAPER] Fetching HTML...");
     const html = await fetchHTML(url);
+    console.log("[SCRAPER] HTML length:", html.length);
     const $ = cheerio.load(html);
 
     // Combine data from multiple sources
     const jsonLdData = extractJsonLd($) || {};
     const metaData = extractMetaTags($);
     const contentData = extractFromContent($);
+
+    console.log("[SCRAPER] JSON-LD data:", JSON.stringify(jsonLdData, null, 2));
+    console.log("[SCRAPER] Meta data images:", metaData.images?.length || 0);
+    console.log("[SCRAPER] Content data images:", contentData.images?.length || 0);
 
     // Merge with priority: JSON-LD > Meta > Content > Fallback
     const product: ScrapedProduct = {
@@ -310,12 +346,40 @@ export async function scrapeProduct(url: string): Promise<ScrapedProduct> {
       product.images = [product.image];
     }
 
+    console.log("[SCRAPER] Final product:", product.title);
+    console.log("[SCRAPER] Final images:", product.images);
     return product;
   } catch (error) {
-    console.error("Scraping error:", error);
+    console.error("[SCRAPER] Scraping error:", error);
+
+    // Try to at least extract hostname for title
+    let hostname = "Unknown";
+    try {
+      hostname = new URL(url).hostname.replace("www.", "");
+    } catch {}
+
+    // Return a product with styled placeholder that includes the brand
     return {
-      ...FALLBACK_PRODUCT,
-      title: `Product from ${new URL(url).hostname}`,
+      title: `Product from ${hostname}`,
+      price: "$0.00",
+      image: `https://placehold.co/800x800/1a1a2e/ccff00?text=${encodeURIComponent(hostname)}`,
+      description: `Product from ${hostname}. The website blocked automated access - try a Shopify store URL.`,
+      images: [`https://placehold.co/800x800/1a1a2e/ccff00?text=${encodeURIComponent(hostname)}`],
     };
   }
+}
+
+// Create product from direct image URLs (for when scraping fails)
+export function createProductFromImages(
+  title: string,
+  price: string,
+  images: string[]
+): ScrapedProduct {
+  return {
+    title,
+    price,
+    image: images[0] || FALLBACK_PRODUCT.image,
+    description: `Custom product: ${title}`,
+    images,
+  };
 }

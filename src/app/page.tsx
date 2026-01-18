@@ -169,15 +169,15 @@ export default function Home() {
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="glass-dark overflow-hidden flex flex-col"
+              className="glass-dark overflow-hidden flex flex-col min-h-0"
             >
-              <div className="p-4 border-b border-white/10">
+              <div className="p-4 border-b border-white/10 shrink-0">
                 <h2 className="font-semibold text-white">Preview</h2>
                 <p className="text-xs text-zinc-400">
                   {manifest.product.title}
                 </p>
               </div>
-              <div className="flex-1 p-4">
+              <div className="flex-1 min-h-0 p-4">
                 <VideoPlayer manifest={manifest} />
               </div>
             </motion.div>
@@ -188,7 +188,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-white/10 py-4">
         <div className="container mx-auto px-4 text-center text-xs text-zinc-500">
-          Built with Next.js 16, Remotion 4.0, and Gemini 2.5 Flash
+          Built with Next.js 16, Remotion 4.0, and Gemini 2.0 Flash
         </div>
       </footer>
     </main>
